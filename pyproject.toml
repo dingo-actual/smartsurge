@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smartsurge"
+version = "0.0.1"
+description = "Enhanced Requests Library with Adaptive Rate Limit Estimation"
+readme = "README.md"
+authors = [
+    {name = "Ryan Taylor", email = "ryan@beta-reduce.net"},
+]
+license = "Apache-2.0"
+license-files = ["LICEN[CS]E*"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+keywords = ["http", "requests", "rate-limit", "api", "bayesian", "adaptive"]
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.32.3",
+    "aiohttp>=3.11.18",
+    "pydantic>=2.11.4",
+    "scipy>=1.15.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "black>=25.1.0",
+    "isort>=6.0.1",
+    "mypy>=1.15.0",
+    "flake8>=7.2.0",
+    "werkzeug>=3.1.3",
+    "flask>=3.1.0",
+    "numpy>=2.2.5"
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.12",
+    "mkdocstrings[python]>=0.29.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/dingo-actual/smartsurge"
+Documentation = "https://github.com/dingo-actual/smartsurge/docs/index.md"
+Repository = "https://github.com/dingo-actual/smartsurge"
+Issues = "https://github.com/dingo-actual/smartsurge/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.black]
+line-length = 88
+target-version = ["py38", "py39", "py310", "py312", "py313"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+asyncio_default_fixture_loop_scope = "function"
