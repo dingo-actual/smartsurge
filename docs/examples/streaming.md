@@ -3,9 +3,9 @@
 ## Basic JSON Streaming
 
 ```python
-from smartsurge import Client, JSONStreamingRequest
+from smartsurge import SmartSurgeClient, JSONStreamingRequest
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Stream a large JSON response
 
@@ -25,9 +25,9 @@ print(f"First item: {result}")
 
 ```python
 import os
-from smartsurge import Client, JSONStreamingRequest
+from smartsurge import SmartSurgeClient, JSONStreamingRequest
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 state_file = "download_state.json"
 
@@ -61,7 +61,7 @@ try:
 ## Custom Streaming Request Implementation
 
 ```python
-from smartsurge import Client, AbstractStreamingRequest
+from smartsurge import SmartSurgeClient, AbstractStreamingRequest
 import csv
 import io
 
@@ -160,7 +160,7 @@ class CSVStreamingRequest(AbstractStreamingRequest):
     
 # Use the custom streaming class
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Stream a large CSV file
 

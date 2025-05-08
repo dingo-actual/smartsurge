@@ -10,10 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Initial release
-- Client implementation with adaptive Bayesian rate limit estimation
+- SmartSurgeClient implementation with adaptive rate limit estimation
 - Support for all common HTTP methods (GET, POST, PUT, DELETE, PATCH)
 - Streaming request functionality with resumability
 - Asynchronous request support
 - Comprehensive logging and error handling
-- Robust Bayesian model for rate limit estimation
+- Hidden Markov Model for rate limit estimation
 - Utilities for timing, logging, and request handling

@@ -93,7 +93,7 @@ Returns a human-readable string representation of the rate limit.
 class RequestHistory(BaseModel):
     """
     Tracks request logs and estimates rate limits for a single endpoint and method combination
-    using a statistically rigorous Bayesian approach.
+    using a statistically rigorous approach.
     """
 ```
 

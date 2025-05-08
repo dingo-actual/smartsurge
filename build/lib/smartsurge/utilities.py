@@ -63,7 +63,7 @@ def log_context(context_name: str, logger: Optional[logging.Logger] = None,
         level: Logging level
         include_id: Whether to include a correlation ID
     """
-    log = logger if isinstance(logger, logging.Logger) else logging.getLogger(__name__)
+    log = logger or logging.getLogger(__name__)
     context_id = str(uuid.uuid4())[:6] if include_id else ""
     id_suffix = f" [{context_id}]" if include_id else ""
     
@@ -194,7 +194,7 @@ def merge_histories(histories: List[RequestHistory], rate_limit: Optional[float]
                 time_period=1.0,  # Assuming time_period is 1 second
                 last_updated=datetime.now(timezone.utc)
             )
-        else:
+        elif not history.rate_limit:
             # Check for 429 responses and set a conservative rate limit if needed
             has_429 = any(entry.status_code == 429 for entry in history.entries)
             if has_429:

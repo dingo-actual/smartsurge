@@ -3,11 +3,11 @@
 ## Simple GET Request
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
 # Create a client
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Make a GET request
 
@@ -29,9 +29,9 @@ else:
 ## POST Request with JSON Data
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Create a new user
 
@@ -55,14 +55,14 @@ else:
 print(f"Failed to create user: {response.text}")
 ```
 
-## Using Client as a Context Manager
+## Using SmartSurgeClient as a Context Manager
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
 # Use context manager to ensure the client is properly closed
 
-with Client(base_url="https://api.example.com") as client:
+with SmartSurgeClient(base_url="https://api.example.com") as client:
     # Make multiple requests
     users_response, users_history = client.get("/users")
     products_response, products_history = client.get("/products")
@@ -77,9 +77,9 @@ with Client(base_url="https://api.example.com") as client:
 ## Error Handling
 
 ```python
-from smartsurge import Client, RateLimitExceeded, StreamingError
+from smartsurge import SmartSurgeClient, RateLimitExceeded, StreamingError
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 try:
     response, history = client.get("/restricted-endpoint")
@@ -96,9 +96,9 @@ except requests.RequestException as e:
 ## Making Requests with Custom Parameters
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # GET request with parameters
 

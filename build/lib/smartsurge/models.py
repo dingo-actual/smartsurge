@@ -29,18 +29,12 @@ class RequestMethod(str, Enum):
     HEAD = "HEAD"
     OPTIONS = "OPTIONS"
     PATCH = "PATCH"
-    
-    def __str__(self) -> str:
-        return self.value
 
 class SearchStatus(str, Enum):
     """Status of the rate limit search process."""
-    NOT_STARTED = "NOT_STARTED"
-    WAITING_TO_ESTIMATE = "WAITING_TO_ESTIMATE"
-    COMPLETED = "COMPLETED"
-    
-    def __str__(self) -> str:
-        return self.value
+    NOT_STARTED = "not_started"
+    WAITING_TO_ESTIMATE = "waiting_to_estimate"
+    COMPLETED = "completed"
 
 class HMMParams(BaseModel):
     """
@@ -110,7 +104,7 @@ class RequestEntry(BaseModel):
     success: bool = Field(description="Whether the request was successful")
     max_requests: Optional[int] = Field(default=None, ge=1, description="Maximum requests allowed if specified")
     max_request_period: Optional[float] = Field(default=None, gt=0.0, description="Period for max_requests in seconds")
-    response_headers: Optional[Dict[str, Any]] = Field(default=None, description="Response headers for additional rate limit details")
+    response_headers: Optional[Dict[str, str]] = Field(default=None, description="Response headers for additional rate limit details")
 
     @model_validator(mode="after")
     def validate_success_code_consistency(self) -> "RequestEntry":

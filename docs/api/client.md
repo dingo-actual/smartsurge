@@ -1,13 +1,13 @@
-# Client API Reference
+# SmartSurgeClient API Reference
 
-The `Client` class is the main entry point for the SmartSurge library, providing methods for making HTTP requests with adaptive rate limit detection and enforcement.
+The `SmartSurgeClient` class is the main entry point for the SmartSurge library, providing methods for making HTTP requests with adaptive rate limit detection and enforcement.
 
-## `Client`
+## `SmartSurgeClient`
 
 ```python
-class Client:
+class SmartSurgeClient:
 """
-A wrapper around requests library with adaptive Bayesian rate limiting and resumable streaming.
+A wrapper around requests library with adaptive rate limiting and resumable streaming.
 """
 ```
 
@@ -40,7 +40,7 @@ Creates a new SmartSurge client.
 - `max_time_period` - Maximum time period to consider for rate limiting (seconds)
 - `confidence_threshold` - Confidence threshold for rate limit estimation (0.0-1.0)
 - `logger` - Optional custom logger to use
-- `**kwargs` - Additional configuration options for ClientConfig
+- `**kwargs` - Additional configuration options for SmartSurgeClientConfig
 
 ### Methods
 
@@ -67,7 +67,7 @@ def request(self,
             request_history: Optional[RequestHistory] = None) -> Tuple[requests.Response, RequestHistory]
 ```
 
-Makes an HTTP request with adaptive Bayesian rate limiting.
+Makes an HTTP request with adaptive rate limiting.
 
 **Parameters:**
 
@@ -168,16 +168,16 @@ def close(self)
 Closes the client and releases resources.
 
 ```python
-def __enter__(self) -> 'Client'
+def __enter__(self) -> 'SmartSurgeClient'
 def __exit__(self, exc_type, exc_val, exc_tb) -> None
 ```
 
 Context manager support for the client.
 
-## `ClientConfig`
+## `SmartSurgeClientConfig`
 
 ```python
-class ClientConfig(BaseModel):
+class SmartSurgeClientConfig(BaseModel):
     """
     Configuration for the SmartSurge client.
     """

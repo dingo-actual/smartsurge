@@ -1,11 +1,11 @@
 # SmartSurge: Enhanced Requests Library with Adaptive Rate Limit Estimation
 
-SmartSurge is a Python library that enhances the functionality of the requests library with automatic rate limit detection and enforcement, using a statistically rigorous Bayesian approach.
+SmartSurge is a Python library that enhances the functionality of the requests library with automatic rate limit detection and enforcement, using a statistically rigorous approach.
 
 ## Features
 
 - **Automatic Rate Limit Detection**: Automatically detects rate limits through a principled search procedure.
-- **Bayesian Rate Limit Estimation**: Uses Bayesian statistics to estimate rate limits with confidence intervals.
+- **Hidden Markov Model for Rate Limit Estimation**: Uses a Hidden Markov Model to estimate rate limits with confidence intervals.
 - **Adaptive Rate Limiting**: Dynamically adapts to changing rate limits.
 - **Resumable Streaming Requests**: Supports resumable streaming for large downloads.
 - **Comprehensive Logging**: Detailed logging of request history and rate limit estimation.
@@ -21,11 +21,11 @@ pip install smartsurge
 ## Quick Start
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
 # Create a client
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Make requests - SmartSurge will automatically detect and respect rate limits
 

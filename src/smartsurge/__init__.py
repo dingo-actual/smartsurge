@@ -3,7 +3,7 @@ SmartSurge: Enhanced Requests Library with Adaptive Rate Limit Estimation
 
 This library extends the functionality of the requests library with:
 - Automatic rate limit detection and enforcement
-- Bayesian rate limit estimation
+- Adaptive rate limit estimation
 - Resumable streaming requests
 - Robust error handling
 """
@@ -11,21 +11,19 @@ This library extends the functionality of the requests library with:
 import logging
 from importlib.metadata import version, PackageNotFoundError
 
-from .client import Client, ClientConfig
+from . import client
+from . import exceptions
+from . import logging_
+from . import models
+from . import streaming
+from . import utilities
+from .client import SmartSurgeClient, ClientConfig
 from .exceptions import (
-    EnhancedRequestsException,
     RateLimitExceeded,
     StreamingError,
     ResumeError,
     ValidationError,
     ConfigurationError,
-)
-from .models import (
-    RequestMethod,
-    SearchStatus,
-    RequestEntry,
-    RateLimit,
-    RequestHistory,
 )
 from .streaming import (
     StreamingState,
@@ -51,7 +49,7 @@ logger = logging.getLogger("smartsurge")
 
 # Define what's available via the public API
 __all__ = [
-    "Client",
+    "SmartSurgeClient",
     "ClientConfig",
     "EnhancedRequestsException",
     "RateLimitExceeded",

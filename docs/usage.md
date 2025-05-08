@@ -5,11 +5,11 @@ This guide provides a comprehensive overview of SmartSurge's functionality.
 ## Basic Usage
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
 # Create a client
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Make a GET request
 
@@ -27,12 +27,12 @@ if history.rate_limit:
 
 ```
 
-## Client Configuration
+## SmartSurgeSmartSurgeClient Configuration
 
-The Client can be configured with various options:
+The SmartSurgeClient can be configured with various options:
 
 ```python
-from smartsurge import Client, configure_logging
+from smartsurge import SmartSurgeClient, configure_logging
 
 # Configure logging
 
@@ -40,7 +40,7 @@ logger = configure_logging(level="DEBUG", output_file="smartsurge.log")
 
 # Create a client with custom configuration
 
-client = Client(
+client = SmartSurgeClient(
     base_url="https://api.example.com",
     timeout=(5.0, 30.0),  # (connect timeout, read timeout)
     max_retries=5,
@@ -109,10 +109,10 @@ For high-throughput applications, SmartSurge provides async request methods:
 
 ```python
 import asyncio
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
 async def fetch_data():
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
     # Make async requests
     response, history = await client.async_get("/endpoint")
@@ -132,10 +132,10 @@ For making multiple requests to the same endpoint pattern:
 
 ```python
 import asyncio
-from smartsurge import Client, async_request_with_history
+from smartsurge import SmartSurgeClient, async_request_with_history
 
 async def fetch_multiple():
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
     endpoints = [f"/items/{i}" for i in range(1, 11)]
     
@@ -166,9 +166,9 @@ results = asyncio.run(fetch_multiple())
 SmartSurge provides specific exceptions for different error cases:
 
 ```python
-from smartsurge import Client, RateLimitExceeded, StreamingError
+from smartsurge import SmartSurgeClient, RateLimitExceeded, StreamingError
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 try:
     response, history = client.get("/endpoint")
@@ -184,14 +184,14 @@ except Exception as e:
 
 ## Context Manager
 
-SmartSurge's Client can be used as a context manager:
+SmartSurge's SmartSurgeClient can be used as a context manager:
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
-with Client(base_url="https://api.example.com") as client:
+with SmartSurgeClient(base_url="https://api.example.com") as client:
     response, history = client.get("/endpoint")
-# Client is automatically closed when exiting the context
+# SmartSurgeClient is automatically closed when exiting the context
 ```
 
 See the [API Reference](api/client.md) for detailed documentation of all available methods and options.

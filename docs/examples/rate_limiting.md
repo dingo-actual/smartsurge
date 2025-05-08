@@ -6,7 +6,7 @@ This example demonstrates how SmartSurge discovers and adapts to rate limits.
 
 ```python
 import time
-from smartsurge import Client, configure_logging
+from smartsurge import SmartSurgeClient, configure_logging
 
 # Configure detailed logging to observe the rate limit discovery process
 
@@ -14,7 +14,7 @@ logger = configure_logging(level="DEBUG", output_file="rate_limit_discovery.log"
 
 # Create a client with a short min_time_period to observe rate limit discovery faster
 
-client = Client(
+client = SmartSurgeClient(
     base_url="https://api.example.com",
     min_time_period=0.1,  # 100ms minimum time period
     max_time_period=60.0,  # 1 minute maximum time period
@@ -55,10 +55,10 @@ This example shows how SmartSurge adapts when a rate limit changes.
 
 ```python
 import time
-from smartsurge import Client, configure_logging
+from smartsurge import SmartSurgeClient, configure_logging
 
 logger = configure_logging(level="INFO")
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # First phase: Make requests until rate limit is detected
 
@@ -103,9 +103,9 @@ for i in range(50):
 ## Handling Multiple Endpoints
 
 ```python
-from smartsurge import Client
+from smartsurge import SmartSurgeClient
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Different endpoints may have different rate limits
 
@@ -137,9 +137,9 @@ for endpoint in endpoints:
 ## Using Different HTTP Methods
 
 ```python
-from smartsurge import Client, RequestMethod
+from smartsurge import SmartSurgeClient, RequestMethod
 
-client = Client(base_url="https://api.example.com")
+client = SmartSurgeClient(base_url="https://api.example.com")
 
 # Different HTTP methods may have different rate limits
 
