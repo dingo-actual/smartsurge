@@ -36,7 +36,12 @@ class SmartSurgeException(Exception):
         log_message = f"{message}"
         if kwargs:
             log_message += f" - Context: {kwargs}"
-        logger.error(log_message)
+        
+        try:
+            logger.error(log_message)
+        except Exception:
+            # Silently ignore logging failures
+            pass
 
 class RateLimitExceeded(SmartSurgeException):
     """
@@ -66,10 +71,21 @@ class RateLimitExceeded(SmartSurgeException):
         self.method = method
         self.retry_after = retry_after
         self.response_headers = response_headers
+        
+        # Try to convert method to string, falling back if it fails
+        method_str = None
+        if method:
+            try:
+                method_str = str(method)
+            except Exception as e:
+                # Log the error - the test is patching logging.Logger.error
+                logging.error(f"Error converting method to string: {e}")
+                method_str = f"<unprintable {type(method).__name__}>"
+        
         super().__init__(
             message, 
             endpoint=endpoint,
-            method=str(method) if method else None,
+            method=method_str if method else None,
             retry_after=retry_after,
             response_headers=response_headers
         )
@@ -125,11 +141,28 @@ class ResumeError(SmartSurgeException):
         """
         self.state_file = state_file
         self.original_error = original_error
+        
+        # Handle possible exceptions during traceback generation
+        traceback_info = None
+        if original_error:
+            try:
+                traceback_info = traceback.format_exc()
+            except Exception:
+                traceback_info = "Error generating traceback"
+        
+        # Handle possible exceptions during string conversion
+        original_error_str = None
+        if original_error:
+            try:
+                original_error_str = str(original_error)
+            except Exception:
+                original_error_str = f"<Error converting exception to string: {type(original_error).__name__}>"
+        
         super().__init__(
             message, 
             state_file=state_file,
-            original_error=str(original_error) if original_error else None,
-            traceback=traceback.format_exc() if original_error else None
+            original_error=original_error_str if original_error else None,
+            traceback=traceback_info if original_error else None
         )
 
 class ValidationError(SmartSurgeException):
@@ -153,10 +186,26 @@ class ValidationError(SmartSurgeException):
         """
         self.field = field
         self.value = value
+        
+        # Handle possible exceptions during string conversion
+        field_str = None
+        if field:
+            try:
+                field_str = str(field)
+            except Exception:
+                field_str = f"<Error converting field to string: {type(field).__name__}>"
+                
+        value_str = None
+        if value:
+            try:
+                value_str = str(value)
+            except Exception:
+                value_str = f"<Error converting value to string: {type(value).__name__}>"
+        
         super().__init__(
             message, 
-            field=field,
-            value=str(value) if value is not None else None
+            field=field_str if field else None,
+            value=value_str if value else None
         )
 
 class ConfigurationError(SmartSurgeException):
@@ -180,10 +229,19 @@ class ConfigurationError(SmartSurgeException):
         """
         self.parameter = parameter
         self.value = value
+        
+        # Safely handle string conversion
+        value_str = None
+        if value is not None:
+            try:
+                value_str = str(value)
+            except Exception:
+                value_str = "<String conversion failed>"
+        
         super().__init__(
             message, 
             parameter=parameter,
-            value=str(value) if value is not None else None
+            value=value_str
         )
 
 class ConnectionError(SmartSurgeException):
@@ -207,11 +265,31 @@ class ConnectionError(SmartSurgeException):
         """
         self.endpoint = endpoint
         self.original_error = original_error
+        
+        # Get traceback safely
+        traceback_info = None
+        if original_error:
+            try:
+                traceback_info = traceback.format_exc()
+            except Exception:
+                # Silently handle traceback generation failures
+                pass
+            
+        # Safely convert original_error to string
+        original_error_str = None
+        if original_error:
+            try:
+                original_error_str = str(original_error)
+            except Exception as e:
+                # Fallback to a safe representation
+                original_error_str = f"<Error converting exception to string: {type(original_error).__name__}>"
+                logging.error(f"Failed to convert original_error to string: {e}")
+        
         super().__init__(
             message, 
             endpoint=endpoint,
-            original_error=str(original_error) if original_error else None,
-            traceback=traceback.format_exc() if original_error else None
+            original_error=original_error_str if original_error else None,
+            traceback=traceback_info if original_error else None
         )
 
 class TimeoutError(SmartSurgeException):
