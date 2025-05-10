@@ -5,17 +5,20 @@ This module provides classes for handling streaming requests, with support
 for resumable downloads and efficient processing of large responses.
 """
 
-from typing import Any, Dict, Optional, Tuple, TypeVar, Type
+from base64 import b64decode
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union, Type
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import logging
 import os
 import json
+import re
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import uuid
 from abc import ABC, abstractmethod
+from pydantic import field_serializer, field_validator, ValidationError
 
 from .exceptions import StreamingError, ResumeError
 from .utilities import SmartSurgeTimer
@@ -53,6 +56,76 @@ class StreamingState(BaseModel):
     etag: Optional[str] = None
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     request_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    
+    @field_validator("accumulated_data", mode="before")
+    def decode_accumulated_data(cls, v: Union[str, bytes]):
+        """
+        Decodes a string from base64 if it appears to be base64 encoded,
+        otherwise returns the original input.
+        
+        Args:
+            input_data: The input that might be base64 encoded. Can be a string or bytes.
+            
+        Returns:
+            The decoded data if input was base64, otherwise the original input.
+        """
+        # Convert to string if bytes
+        if isinstance(v, bytes):
+            return v
+        elif isinstance(v, str):
+            # Check if the string matches base64 pattern
+            # Base64 strings consist of letters, digits, '+', '/', and may end with '='
+            if not re.match(r'^[A-Za-z0-9+/]*={0,2}$', v):
+                logger.warning(f"String does not match base64 pattern: {v}")
+                try:
+                    v = v.encode("utf-8")
+                except UnicodeEncodeError:
+                    logger.warning(f"Error encoding string as UTF-8: {v}")
+                finally:
+                    return v
+            
+            # The length of base64 encoded string should be a multiple of 4
+            # (or it should be padded to be)
+            if len(v) % 4 != 0:
+                logger.warning(f"Base64 string length is not a multiple of 4: {v}")
+                try:
+                    v = v.encode("utf-8")
+                except UnicodeEncodeError:
+                    logger.error(f"Error encoding string as UTF-8: {v}")
+                    v = b""
+                finally:
+                    return v
+                
+            try:
+                # Try to decode
+                decoded_data = b64decode(v)
+                logger.debug(f"Decoded base64 string: {decoded_data}")
+                
+                # Try to convert to UTF-8 string if possible
+                try:
+                    decoded_data = decoded_data.decode("utf-8")
+                    logger.debug(f"Decoded string: {decoded_data}")
+                    return decoded_data.encode("utf-8")
+                except UnicodeDecodeError:
+                    # If it can't be decoded as UTF-8, return the bytes
+                    logger.warning(f"Failed to decode as UTF-8, returning bytes: {decoded_data}")
+                    return v
+            except Exception:
+                # If any other error occurs, return the original input
+                logger.error(f"Unexpected error decoding {v}", exc_info=True)
+                return b""
+        else:
+            return v
+        
+    @field_serializer("accumulated_data")
+    def serialize_accumulated_data(self, v: bytes):
+        """
+        Serialize accumulated_data to a base64 string for JSON.
+        """
+        import base64
+        if isinstance(v, bytes):
+            return base64.b64encode(v).decode('ascii')
+        return v
 
 class AbstractStreamingRequest(ABC):
     """
@@ -183,11 +256,15 @@ class AbstractStreamingRequest(ABC):
         Returns:
             The loaded state, or None if loading failed
         """
-        if not self.state_file or not os.path.exists(self.state_file):
-            self.logger.warning(f"[{self.request_id}] State file does not exist: {self.state_file}")
+        if not self.state_file:
+            self.logger.warning(f"[{self.request_id}] No state file specified, skipping state load")
             return None
             
         try:
+            if not os.path.exists(self.state_file):
+                self.logger.warning(f"[{self.request_id}] State file does not exist: {self.state_file}")
+                return None
+            
             with open(self.state_file, 'r') as f:
                 state_data = f.read()
             state = StreamingState.model_validate_json(state_data)
@@ -318,7 +395,12 @@ class JSONStreamingRequest(AbstractStreamingRequest):
         Raises:
             ResumeError: If resuming the request fails
         """
-        state = self.load_state()
+        try:
+            state = self.load_state()
+        except Exception as e:
+            self.logger.error(f"[{self.request_id}] Exception when loading state: {e}")
+            raise ResumeError(f"Failed to load state for resumption: {e}")
+        
         if not state:
             self.logger.error(f"[{self.request_id}] Failed to load state for resumption")
             raise ResumeError("Failed to load state for resumption")
@@ -363,7 +445,10 @@ class JSONStreamingRequest(AbstractStreamingRequest):
         
         # Save state periodically
         if self.state_file and self.position % (self.chunk_size * 10) < chunk_size:
-            self.save_state()
+            try:
+                self.save_state()
+            except Exception as e:
+                self.logger.error(f"[{self.request_id}] Failed to save state while processing chunk: {e}")
             
     def get_result(self) -> Any:
         """
@@ -386,4 +471,4 @@ class JSONStreamingRequest(AbstractStreamingRequest):
             # Log a small sample of the data for debugging
             sample = self.accumulated_data[:200].decode('utf-8', errors='replace')
             self.logger.debug(f"[{self.request_id}] JSON sample: {sample}...")
-            raise StreamingError(f"Failed to parse JSON: {e}")
+            raise StreamingError(f"Failed to parse JSON: {e}") from e

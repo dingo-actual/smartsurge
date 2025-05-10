@@ -56,17 +56,30 @@ class SensitiveInfoFilter(logging.Filter):
         Returns:
             True (always allows the record, but redacts sensitive info)
         """
+        def replacement_func(match):
+            return match.group(1) + self.replacement
+
         if isinstance(record.msg, str):
             for pattern in self.compiled_patterns:
-                record.msg = pattern.sub(f'\\1{self.replacement}', record.msg)
+                try:
+                    record.msg = pattern.sub(replacement_func, record.msg)
+                except Exception as e:
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Error applying sensitive info filter: {e}")
         
         # Also check args if they are strings
         if hasattr(record, 'args') and record.args:
             args = list(record.args)
             for i, arg in enumerate(args):
                 if isinstance(arg, str):
+                    arg_accum = arg
                     for pattern in self.compiled_patterns:
-                        args[i] = pattern.sub(f'\\1{self.replacement}', arg)
+                        try:
+                            arg_accum = pattern.sub(replacement_func, arg_accum)
+                        except Exception as e:
+                            logger = logging.getLogger(__name__)
+                            logger.warning(f"Error applying sensitive info filter: {e}")
+                    args[i] = arg_accum
             record.args = tuple(args)
         
         return True
@@ -103,11 +116,23 @@ class PerformanceFilter(logging.Filter):
             True if the record should be logged, False otherwise
         """
         if record.levelno == logging.DEBUG:
-            self.debug_count += 1
-            return (self.debug_count % int(1/max(0.001, self.debug_sample_rate)) == 0)
+            if self.debug_sample_rate >= 1.0:  # Explicitly pass all messages when rate is 1.0
+                return True
+            elif self.debug_sample_rate <= 0.0:
+                return False
+            else:
+                result = (self.debug_count % int(1/max(0.001, self.debug_sample_rate)) == 0)
+                self.debug_count += 1
+                return result
         elif record.levelno == logging.INFO:
-            self.info_count += 1
-            return (self.info_count % int(1/max(0.001, self.info_sample_rate)) == 0)
+            if self.info_sample_rate >= 1.0:  # Explicitly pass all messages when rate is 1.0
+                return True
+            elif self.info_sample_rate <= 0.0:
+                return False
+            else:
+                result = (self.info_count % int(1/max(0.001, self.info_sample_rate)) == 0)
+                self.info_count += 1
+                return result
         else:
             # Always log WARNING, ERROR, CRITICAL
             return True
@@ -169,10 +194,12 @@ def configure_logging(
     # Add filters
     if filter_sensitive:
         sensitive_filter = SensitiveInfoFilter(sensitive_patterns)
-        logger.addFilter(sensitive_filter)
     
     if debug_sample_rate < 1.0 or info_sample_rate < 1.0:
-        performance_filter = PerformanceFilter(debug_sample_rate, info_sample_rate)
+        performance_filter = PerformanceFilter(
+            debug_sample_rate=debug_sample_rate, 
+            info_sample_rate=info_sample_rate
+        )
         logger.addFilter(performance_filter)
     
     # Add console handler if requested
@@ -180,19 +207,58 @@ def configure_logging(
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         console_handler.setLevel(level)
+        if filter_sensitive:
+            console_handler.addFilter(sensitive_filter)
+        
         logger.addHandler(console_handler)
     
     # Add file handler if requested
     if output_file:
-        if log_directory:
-            # Ensure log directory exists
-            os.makedirs(log_directory, exist_ok=True)
-            output_file = os.path.join(log_directory, output_file)
-        
-        file_handler = logging.FileHandler(output_file)
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(level)
-        logger.addHandler(file_handler)
+        try:    
+            if log_directory:
+                # Ensure log directory exists with absolute path handling
+                log_directory = os.path.abspath(log_directory)
+                os.makedirs(log_directory, exist_ok=True)
+                output_file = os.path.join(log_directory, os.path.basename(output_file))
+                
+            file_handler = logging.FileHandler(output_file)
+            file_handler.setFormatter(formatter)
+            file_handler.setLevel(level)
+            if filter_sensitive:
+                file_handler.addFilter(sensitive_filter)
+            
+            try:
+                # Test if file is actually writable
+                with open(output_file, 'a') as f:
+                    pass  # Just checking if we can open for appending
+            except (OSError, PermissionError) as e:
+                raise ValueError(f"Log file '{output_file}' is not writable: {e}")
+            
+            logger.addHandler(file_handler)
+            if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+                logger.warning(f"File handler for '{output_file}' was not properly added")
+            
+            # Verify handler was added successfully by writing a test message
+            logger.debug(f"Logging configured with file handler for {output_file}")
+        except (OSError, PermissionError) as e:
+            if not console_output:
+                # If file handler failed and no console output is configured, add emergency console handler
+                console_handler = logging.StreamHandler(sys.stderr)
+                console_handler.setFormatter(formatter)
+                console_handler.setLevel(logging.WARNING)  # Only warnings and above
+                logger.addHandler(console_handler)
+            
+            logger.warning(f"Could not set up log file '{output_file}': {e}")
+            
+        except Exception as e:
+            # Log unexpected errors
+            if not console_output:
+                # If file handler failed and no console output is configured, add emergency console handler
+                console_handler = logging.StreamHandler(sys.stderr)
+                console_handler.setFormatter(formatter)
+                console_handler.setLevel(logging.WARNING)  # Only warnings and above
+                logger.addHandler(console_handler)
+            logger.error(f"Unexpected error creating file handler: {e}", file=sys.stderr)
     
     # Add any additional handlers
     if additional_handlers:
