@@ -48,8 +48,8 @@ result, history = client.stream_request(
 
 ## Documentation
 
-For full documentation, see [https://smartsurge.readthedocs.io](https://smartsurge.readthedocs.io)
+> In progress.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
