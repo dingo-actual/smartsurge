@@ -20,13 +20,14 @@ from urllib3.util.retry import Retry
 import asyncio
 import aiohttp
 from pydantic import BaseModel, Field, ValidationInfo, ValidationError, field_validator
-from typing import TypeVar, Optional, Dict, Any, Union, Tuple, Type, TYPE_CHECKING
+from typing import TypeVar, Optional, Dict, Any, Union, Sequence, Tuple, Type, TYPE_CHECKING
 
 from .models import RequestMethod, RequestEntry, RequestHistory
 from .streaming import AbstractStreamingRequest
 from .utilities import SmartSurgeTimer
 
 if TYPE_CHECKING:
+    from . import exceptions
     from .exceptions import RateLimitExceeded, StreamingError, ResumeError
 
 # Module-level logger
@@ -62,7 +63,7 @@ class ClientConfig(BaseModel):
     timeout: Tuple[float, float] = Field(default=(10.0, 30.0))  # (connect, read)
     max_retries: int = Field(default=3, ge=0, le=10)
     backoff_factor: float = Field(default=0.3, ge=0.0, le=10.0)
-    verify_ssl: bool = True
+    verify_ssl: bool = Field(default=True, strict=True)
     min_time_period: float = Field(default=1.0, gt=0.0)
     max_time_period: float = Field(default=3600.0, gt=0.0)
     confidence_threshold: float = Field(default=0.9, ge=0.0, le=1.0)
@@ -72,17 +73,18 @@ class ClientConfig(BaseModel):
     max_pool_size: int = Field(default=10, ge=1)
     log_level: int = Field(default=logging.INFO)
     
-    @field_validator('timeout')
+    @field_validator('timeout', mode="before")
     def validate_timeout(cls, v):
         """Validate timeout is a tuple of two positive floats or a single positive float."""
         if isinstance(v, (int, float)):
             if v <= 0:
                 raise ValueError("Timeout must be positive")
             return (v, v)
-        if len(v) != 2:
-            raise ValueError("Timeout must be a tuple of (connect_timeout, read_timeout)")
-        if v[0] <= 0 or v[1] <= 0:
-            raise ValueError("Both connect and read timeouts must be positive")
+        elif isinstance(v, Sequence):
+            if len(v) != 2:
+                raise ValueError("Timeout must be a tuple of (connect_timeout, read_timeout)")
+            if v[0] <= 0 or v[1] <= 0:
+                raise ValueError("Both connect and read timeouts must be positive")
         return v
     
     @field_validator('min_time_period', 'max_time_period')
@@ -91,11 +93,11 @@ class ClientConfig(BaseModel):
         # When validating max_time_period
         if info.field_name == 'max_time_period' and 'min_time_period' in info.data:
             if v < info.data['min_time_period']:
-                raise ValidationError("max_time_period must be greater than min_time_period")
+                raise ValueError("max_time_period must be greater than min_time_period")
         # When validating min_time_period
         elif info.field_name == 'min_time_period' and 'max_time_period' in info.data:
             if v > info.data['max_time_period']:
-                raise ValidationError("min_time_period must be less than max_time_period")
+                raise ValueError("min_time_period must be less than max_time_period")
         return v
 
 class SmartSurgeClient:
@@ -237,13 +239,16 @@ class SmartSurgeClient:
             
         key = (endpoint, method)
         if key not in self.histories:
+            # Use the client's confidence_threshold if None is provided
+            conf_threshold = confidence_threshold if confidence_threshold is not None else self.config.confidence_threshold
+            
             history_logger = self.logger.getChild(f"history.{endpoint}.{method}")
             self.histories[key] = RequestHistory(
                 endpoint=endpoint,
                 method=method,
                 min_time_period=self.config.min_time_period,
                 max_time_period=self.config.max_time_period,
-                confidence_threshold=confidence_threshold,
+                confidence_threshold=conf_threshold,
                 logger=history_logger
             )
             
@@ -510,7 +515,15 @@ class SmartSurgeClient:
             result = streaming_request.get_result()
             return result, history
         except Exception as e:
+            from .exceptions import StreamingError, ResumeError
+            
             self.logger.error(f"[{request_id}] Streaming request failed: {e}")
+            
+            # Save state for later resumption
+            try:
+                streaming_request.save_state()
+            except Exception as save_error:
+                self.logger.error(f"[{request_id}] Failed to save state: {save_error}")
             
             # Check if it's a rate limit error
             rate_limited = False
@@ -559,11 +572,17 @@ class SmartSurgeClient:
                         self.logger.warning(f"[{request_id}] Could not parse Retry-After header: {retry_after}")
             
             # Re-raise as StreamingError if it's not already
-            if not isinstance(e, StreamingError):
-                from .exceptions import StreamingError
-                
+            if isinstance(e, ResumeError):
+                # Already the correct type, just re-raise
+                raise
+            elif state_file and os.path.exists(state_file):
+                raise ResumeError(f"Failed to resume streaming request: {e}", state_file=state_file)
+            elif not isinstance(e, StreamingError):
+                # Convert other exceptions to StreamingError
                 raise StreamingError(f"Streaming request failed: {e}", endpoint=endpoint)
-            raise
+            else:
+                # Already a StreamingError, just re-raise
+                raise
             
     def close(self) -> None:
         """

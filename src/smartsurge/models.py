@@ -105,7 +105,7 @@ class RequestEntry(BaseModel):
     endpoint: str = Field(min_length=1, description="The endpoint that was requested")
     method: RequestMethod = Field(description="HTTP method used")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="When the request was made (UTC)")
-    status_code: int = Field(ge=100, le=599, description="HTTP status code received")
+    status_code: int = Field(ge=0, le=599, description="HTTP status code received")
     response_time: float = Field(ge=0.0, description="Time taken to receive response in seconds")
     success: bool = Field(description="Whether the request was successful")
     max_requests: Optional[int] = Field(default=None, ge=1, description="Maximum requests allowed if specified")
