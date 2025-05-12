@@ -17,3 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive logging and error handling
 - Hidden Markov Model for rate limit estimation
 - Utilities for timing, logging, and request handling
+
+## [0.0.2] - 2025-05-12
+
+### Changed
+
+- Requests dependency updated to version 2.32.0
