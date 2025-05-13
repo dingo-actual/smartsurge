@@ -26,29 +26,29 @@ classifiers = [
 keywords = ["http", "requests", "rate-limit", "api", "hmm", "adaptive"]
 requires-python = ">=3.8"
 dependencies = [
-    "requests>=2",
-    "aiohttp>=3",
-    "pydantic>=2",
-    "scipy>=1",
+    "requests>=2.0.0",
+    "aiohttp>=3.0.0",
+    "pydantic>=2.0.0",
+    "scipy>=1.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8",
-    "pytest-asyncio>=0.26",
-    "pytest-cov>=6",
-    "black>=25",
-    "isort>=6",
-    "mypy>=1",
-    "flake8>=7",
-    "werkzeug>=3",
-    "flask>=3",
-    "numpy>=2"
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.0.0",
+    "black>=25.0.0",
+    "isort>=6.0.0",
+    "mypy>=1.0.0",
+    "flake8>=7.0.0",
+    "werkzeug>=3.0.0",
+    "flask>=3.0.0",
+    "numpy>=2.0.0"
 ]
 docs = [
-    "mkdocs>=1",
-    "mkdocs-material>=9",
-    "mkdocstrings[python]>=0.29",
+    "mkdocs>=1.0.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.29.0",
 ]
 
 [project.urls]
