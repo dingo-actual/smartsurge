@@ -23,3 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Requests dependency updated to version 2.32.0
+
+## [0.0.3] - 2025-05-12
+
+### Changed
+
+- Bump for new release
