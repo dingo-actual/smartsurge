@@ -86,7 +86,6 @@ async def async_request_with_history(
     max_concurrent: int = 5,
     min_time_period: float = 1.0,
     max_time_period: float = 3600.0,
-    confidence_threshold: float = 0.9,
     **kwargs
 ) -> Tuple[List[T], Dict[str, RequestHistory]]:
     """
@@ -99,7 +98,6 @@ async def async_request_with_history(
         max_concurrent: Maximum number of concurrent requests.
         min_time_period: Minimum time period for rate limiting.
         max_time_period: Maximum time period for rate limiting.
-        confidence_threshold: Confidence threshold for rate limit estimation.
         **kwargs: Additional arguments to pass to request_func.
         
     Returns:
@@ -116,8 +114,7 @@ async def async_request_with_history(
             endpoint=endpoint,
             method=method,
             min_time_period=min_time_period,
-            max_time_period=max_time_period,
-            confidence_threshold=confidence_threshold
+            max_time_period=max_time_period
         ) for endpoint in endpoints
     }
     
@@ -130,7 +127,6 @@ async def async_request_with_history(
                 endpoint=endpoint,
                 request_history=histories[endpoint],
                 num_async=len(endpoints),
-                confidence_threshold=confidence_threshold,
                 **kwargs
             )
             return response, history

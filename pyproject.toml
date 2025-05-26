@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=42", "wheel", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "smartsurge"
-version = "0.0.4"
+version = "0.0.5"
 description = "Enhanced Requests Library with Adaptive Rate Limit Estimation"
 readme = "README.md"
 authors = [
@@ -42,12 +42,22 @@ dev = [
     "flake8>=7.0.0",
     "werkzeug>=3.0.0",
     "flask>=3.0.0",
-    "numpy>=2.0.0"
+    "numpy>=2.0.0",
+    "pyperf>=2.0.0"
 ]
 docs = [
     "mkdocs>=1.0.0",
     "mkdocs-material>=9.0.0",
     "mkdocstrings[python]>=0.28.0",
+    "setuptools>=42",
+    "wheel",
+]
+benchmark = [
+    "pyperf>=2.0.0",
+    "matplotlib>=3.0.0",
+    "numpy>=2.0.0",
+    "flask>=3.0.0",
+    "werkzeug>=3.0.0",
 ]
 
 [project.urls]
@@ -56,11 +66,20 @@ Documentation = "https://github.com/dingo-actual/smartsurge/docs/index.md"
 Repository = "https://github.com/dingo-actual/smartsurge"
 Issues = "https://github.com/dingo-actual/smartsurge/issues"
 
+[project.scripts]
+smartsurge-benchmark = "smartsurge.benchmarks.run_benchmark_suite:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["smartsurge", "smartsurge.*"]
+
+[tool.setuptools.package-data]
+"smartsurge.benchmarks" = ["*.py", "*.md", "*.sh"]
+"smartsurge.docs" = ["*.md", "*.pdf", "api/*.md", "api/*.pdf"]
+"*" = ["*.md", "*.txt"]
 
 [tool.isort]
 profile = "black"

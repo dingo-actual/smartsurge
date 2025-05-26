@@ -135,9 +135,41 @@ class AbstractStreamingRequest(ABC):
     that can be paused and resumed. It includes state management, data accumulation,
     and basic error handling.
     """
+    # List of authentication-related headers to purge before saving state
+    AUTH_HEADERS_TO_PURGE = [
+        'authorization',
+        'x-api-key',
+        'x-auth-token',
+        'api-key',
+        'x-access-token',
+        'x-token',
+        'x-session-token',
+        'cookie',
+        'x-csrf-token',
+        'x-client-secret',
+        'proxy-authorization',
+        'x-amz-security-token',
+        'x-goog-api-key',
+        'apikey',
+        'auth-token',
+        'authentication',
+        'x-authentication',
+        'x-authorization',
+        'access-token',
+        'secret-key',
+        'private-key',
+        'x-secret-key',
+        'x-private-key',
+        'bearer',
+        'oauth-token',
+        'x-oauth-token'
+    ]
+    
     def __init__(self, 
                  endpoint: str, 
                  headers: Dict[str, str],
+                 params: Optional[Dict[str, Any]] = None,
+                 data: Optional[Dict[str, Any]] = None,
                  chunk_size: int = 8192,
                  state_file: Optional[str] = None,
                  logger: Optional[logging.Logger] = None,
@@ -148,6 +180,8 @@ class AbstractStreamingRequest(ABC):
         Args:
             endpoint: The endpoint to request
             headers: HTTP headers for the request
+            params: Optional query parameters
+            data: Optional request body data
             chunk_size: Size of chunks to process
             state_file: File to save state for resumption
             logger: Optional custom logger to use
@@ -155,6 +189,8 @@ class AbstractStreamingRequest(ABC):
         """
         self.endpoint = endpoint
         self.headers = headers
+        self.params = params
+        self.data = data
         self.chunk_size = chunk_size
         self.state_file = state_file
         self.accumulated_data = bytearray()
@@ -215,21 +251,52 @@ class AbstractStreamingRequest(ABC):
         """
         pass
         
+    def _purge_auth_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+        """
+        Remove authentication-related headers for security.
+        
+        Args:
+            headers: Original headers dictionary
+            
+        Returns:
+            A new dictionary with authentication headers removed
+        """
+        purged_headers = {}
+        removed_headers = []
+        
+        for key, value in headers.items():
+            # Check if the header key (case-insensitive) is in our purge list
+            if key.lower() in self.AUTH_HEADERS_TO_PURGE:
+                removed_headers.append(key)
+            else:
+                purged_headers[key] = value
+        
+        if removed_headers:
+            self.logger.debug(f"[{self.request_id}] Purged authentication headers: {removed_headers}")
+        
+        return purged_headers
+    
     def save_state(self) -> None:
         """
         Save the current state for resumption.
         
         This method saves the current state of the streaming request to a file,
-        allowing it to be resumed later.
+        allowing it to be resumed later. Authentication headers are purged
+        before saving for security.
         """
         if not self.state_file:
             self.logger.warning(f"[{self.request_id}] No state file specified, skipping state save")
             return
+        
+        # Purge authentication headers before saving
+        safe_headers = self._purge_auth_headers(self.headers)
             
         state = StreamingState(
             endpoint=self.endpoint,
             method="GET",  # Assuming GET for streaming
-            headers=self.headers,
+            headers=safe_headers,
+            params=self.params,
+            data=self.data,
             accumulated_data=bytes(self.accumulated_data),
             last_position=self.position,
             total_size=self.total_size,
@@ -276,8 +343,24 @@ class AbstractStreamingRequest(ABC):
             self.position = state.last_position
             self.total_size = state.total_size
             self.etag = state.etag
+            
+            # Load params and data (with backward compatibility)
+            self.params = state.params if state.params is not None else getattr(self, 'params', None)
+            self.data = state.data if state.data is not None else getattr(self, 'data', None)
+            
             if state.request_id:
                 self.request_id = state.request_id
+            
+            # Warn if authentication headers were likely purged
+            if hasattr(self, '_original_headers'):
+                # Check if any auth headers are missing
+                original_auth_headers = {k: v for k, v in self._original_headers.items() 
+                                       if k.lower() in self.AUTH_HEADERS_TO_PURGE}
+                if original_auth_headers:
+                    self.logger.warning(
+                        f"[{self.request_id}] Authentication headers were purged from saved state. "
+                        f"You may need to re-authenticate when resuming."
+                    )
             
             self.logger.debug(f"[{self.request_id}] Loaded state from {self.state_file}")
             return state
@@ -297,6 +380,7 @@ class JSONStreamingRequest(AbstractStreamingRequest):
                  endpoint: str, 
                  headers: Dict[str, str],
                  params: Optional[Dict[str, Any]] = None,
+                 data: Optional[Dict[str, Any]] = None,
                  chunk_size: int = 8192,
                  state_file: Optional[str] = None,
                  logger: Optional[logging.Logger] = None,
@@ -308,13 +392,13 @@ class JSONStreamingRequest(AbstractStreamingRequest):
             endpoint: The endpoint to request
             headers: HTTP headers for the request
             params: Query parameters
+            data: Optional request body data
             chunk_size: Size of chunks to process
             state_file: File to save state for resumption
             logger: Optional custom logger to use
             request_id: Optional request ID for tracking and correlation
         """
-        super().__init__(endpoint, headers, chunk_size, state_file, logger, request_id)
-        self.params = params or {}
+        super().__init__(endpoint, headers, params, data, chunk_size, state_file, logger, request_id)
         self.response = None
         
     def start(self) -> None:
