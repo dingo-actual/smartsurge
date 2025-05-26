@@ -1,0 +1,22 @@
+# Include documentation build files
+include build_docs.py
+include package.json
+
+# Include documentation source files
+recursive-include src/smartsurge/docs *.md
+recursive-include src/smartsurge/docs *.pdf
+
+# Include other important files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING
+include CODE_OF_CONDUCT.md
+include pyproject.toml
+include setup.py
+
+# Include test files
+recursive-include tests *.py
+
+# Include benchmark files  
+recursive-include src/smartsurge/benchmarks *.py *.md *.sh

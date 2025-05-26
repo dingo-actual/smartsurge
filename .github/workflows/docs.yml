@@ -1,0 +1,65 @@
+name: Build Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'build_docs.py'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'build_docs.py'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install markdown-pdf
+      run: npm install -g markdown-pdf
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+    
+    - name: Build PDF documentation
+      run: python build_docs.py
+    
+    - name: Upload PDF artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: documentation-pdfs
+        path: docs/pdf/*.pdf
+        retention-days: 30
+    
+    - name: Create Release (on main branch push)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: docs-${{ github.run_number }}
+        name: Documentation Build ${{ github.run_number }}
+        draft: false
+        prerelease: true
+        files: docs/pdf/*.pdf
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

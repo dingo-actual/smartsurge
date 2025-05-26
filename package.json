@@ -1,0 +1,13 @@
+{
+  "name": "smartsurge-docs",
+  "version": "1.0.0",
+  "description": "Documentation build tools for SmartSurge",
+  "private": true,
+  "scripts": {
+    "build-docs": "python build_docs.py",
+    "install-deps": "npm install"
+  },
+  "devDependencies": {
+    "md-to-pdf": "^5.2.4"
+  }
+}
