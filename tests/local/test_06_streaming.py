@@ -286,7 +286,7 @@ class Test_StreamingState_03_BoundaryBehaviors:
 
 
 # Create a test implementation of AbstractStreamingRequest for testing
-class TestStreamingRequest(AbstractStreamingRequest):
+class DummyStreamingRequest(AbstractStreamingRequest):
     """Concrete implementation of AbstractStreamingRequest for testing."""
     
     def start(self):
@@ -313,12 +313,13 @@ class Test_AbstractStreamingRequest_SaveState_01_NominalBehaviors:
         mock_exists.return_value = True
         
         # Initialize test object
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={"Authorization": "Bearer token123"},
             state_file="/tmp/test-state.json"
         )
         req.position = 100
+        req.data = {"key": "value"}
         req.accumulated_data = bytearray(b"test data")
         req.total_size = 500
         req.etag = "etag123"
@@ -334,7 +335,8 @@ class Test_AbstractStreamingRequest_SaveState_01_NominalBehaviors:
         
         assert state_dict["endpoint"] == "https://api.example.com/data"
         assert state_dict["method"] == "GET"
-        assert state_dict["headers"] == {"Authorization": "Bearer token123"}
+        assert state_dict["headers"] == {}
+        assert state_dict["data"] == {"key": "value"}
         assert state_dict["accumulated_data"] == "dGVzdCBkYXRh"  # Base64 encoded "test data"
         assert state_dict["last_position"] == 100
         assert state_dict["total_size"] == 500
@@ -348,7 +350,7 @@ class Test_AbstractStreamingRequest_SaveState_01_NominalBehaviors:
         """Test it writes state to specified file in JSON format."""
         mock_exists.return_value = True
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/test-state.json"
@@ -367,7 +369,7 @@ class Test_AbstractStreamingRequest_SaveState_01_NominalBehaviors:
         """Test it creates parent directories if they don't exist."""
         mock_exists.return_value = False
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/directory/test-state.json"
@@ -387,7 +389,7 @@ class Test_AbstractStreamingRequest_SaveState_01_NominalBehaviors:
              patch("os.makedirs"), \
              patch("builtins.open", mock_open()):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json",
@@ -409,7 +411,7 @@ class Test_AbstractStreamingRequest_SaveState_02_NegativeBehaviors:
         # Setup a mock logger
         mock_logger = MagicMock(spec=logging.Logger)
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file=None,  # No state file
@@ -430,7 +432,7 @@ class Test_AbstractStreamingRequest_SaveState_02_NegativeBehaviors:
         with patch("os.path.exists", return_value=True), \
              patch("builtins.open", side_effect=IOError("Test IO error")):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json",
@@ -457,7 +459,7 @@ class Test_AbstractStreamingRequest_SaveState_03_BoundaryBehaviors:
         """Test it handles empty accumulated_data."""
         mock_exists.return_value = True
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/test-state.json"
@@ -478,7 +480,7 @@ class Test_AbstractStreamingRequest_SaveState_03_BoundaryBehaviors:
         """Test it handles position of 0."""
         mock_exists.return_value = True
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/test-state.json"
@@ -500,7 +502,7 @@ class Test_AbstractStreamingRequest_SaveState_03_BoundaryBehaviors:
         mock_exists.return_value = True
         
         # Create object with minimal required data
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/test-state.json"
@@ -528,7 +530,7 @@ class Test_AbstractStreamingRequest_SaveState_04_ErrorHandlingBehaviors:
         with patch("os.path.exists", return_value=False), \
              patch("os.makedirs", side_effect=OSError("Permission denied")):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/directory/test-state.json",
@@ -553,7 +555,7 @@ class Test_AbstractStreamingRequest_SaveState_04_ErrorHandlingBehaviors:
         with patch("os.path.exists", return_value=True), \
              patch("builtins.open", side_effect=PermissionError("Access denied")):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json",
@@ -574,7 +576,7 @@ class Test_AbstractStreamingRequest_SaveState_04_ErrorHandlingBehaviors:
         """Test it doesn't propagate exceptions to the caller."""
         with patch("os.path.exists", side_effect=Exception("Unexpected error")):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json"
@@ -612,7 +614,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",  # Different from saved state
             headers={"Original": "header"},
             state_file="/tmp/test-state.json"
@@ -655,7 +657,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",  # Different from saved state
             headers={"Original": "header"},
             state_file="/tmp/test-state.json"
@@ -691,7 +693,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",
             headers={"Original": "header"},
             state_file="/tmp/test-state.json"
@@ -721,7 +723,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",
             headers={},
             state_file="/tmp/test-state.json",
@@ -746,7 +748,7 @@ class Test_AbstractStreamingRequest_LoadState_02_NegativeBehaviors:
         # Setup mock logger
         mock_logger = MagicMock(spec=logging.Logger)
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/nonexistent-state.json",
@@ -770,7 +772,7 @@ class Test_AbstractStreamingRequest_LoadState_02_NegativeBehaviors:
         # Setup mock logger
         mock_logger = MagicMock(spec=logging.Logger)
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/test-state.json",
@@ -800,7 +802,7 @@ class Test_AbstractStreamingRequest_LoadState_02_NegativeBehaviors:
         # Setup mock logger
         mock_logger = MagicMock(spec=logging.Logger)
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/data",
             headers={},
             state_file="/tmp/test-state.json",
@@ -825,7 +827,7 @@ class Test_AbstractStreamingRequest_LoadState_02_NegativeBehaviors:
         mock_logger = MagicMock(spec=logging.Logger)
         
         with patch("os.path.exists", return_value=False):
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/nonexistent-state.json",
@@ -862,7 +864,7 @@ class Test_AbstractStreamingRequest_LoadState_03_BoundaryBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",
             headers={},
             state_file="/tmp/test-state.json"
@@ -893,7 +895,7 @@ class Test_AbstractStreamingRequest_LoadState_03_BoundaryBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",
             headers={},
             state_file="/tmp/test-state.json"
@@ -920,7 +922,7 @@ class Test_AbstractStreamingRequest_LoadState_04_ErrorHandlingBehaviors:
         with patch("os.path.exists", return_value=True), \
              patch("builtins.open", side_effect=IOError("Test IO error")):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json",
@@ -948,7 +950,7 @@ class Test_AbstractStreamingRequest_LoadState_04_ErrorHandlingBehaviors:
         with patch("os.path.exists", return_value=True), \
              patch("builtins.open", mock_open(read_data="invalid json {")):
             
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json",
@@ -971,7 +973,7 @@ class Test_AbstractStreamingRequest_LoadState_04_ErrorHandlingBehaviors:
         """Test it returns None instead of raising exceptions."""
         # Test with file operation exception
         with patch("os.path.exists", side_effect=Exception("Unexpected error")):
-            req = TestStreamingRequest(
+            req = DummyStreamingRequest(
                 endpoint="https://api.example.com/data",
                 headers={},
                 state_file="/tmp/test-state.json"
@@ -1007,7 +1009,7 @@ class Test_AbstractStreamingRequest_LoadState_05_StateTransitionBehaviors:
         mock_file.return_value.read.return_value = state_data
         
         # Create object with different initial state
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",
             headers={"Original": "header"},
             state_file="/tmp/test-state.json"
@@ -1048,7 +1050,7 @@ class Test_AbstractStreamingRequest_LoadState_05_StateTransitionBehaviors:
         })
         mock_file.return_value.read.return_value = state_data
         
-        req = TestStreamingRequest(
+        req = DummyStreamingRequest(
             endpoint="https://api.example.com/original",
             headers={"Original": "header"},
             state_file="/tmp/test-state.json"
@@ -2678,3 +2680,365 @@ class Test_JSONStreamingRequest_GetResult_05_StateTransitionBehaviors:
         current_vars.pop('response', None)
 
         assert original_vars == current_vars, "Object state changed after calling get_result"
+
+
+# Additional Tests for params and data attributes without mocks
+
+class Test_AbstractStreamingRequest_ParamsData_Attributes:
+    """Test that AbstractStreamingRequest properly handles params and data attributes."""
+    
+    def test_initializes_with_params_and_data(self):
+        """Test that AbstractStreamingRequest initializes with params and data attributes."""
+        params = {"page": 1, "limit": 100}
+        data = {"field1": "value1", "field2": "value2"}
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers={"Content-Type": "application/json"},
+            params=params,
+            data=data
+        )
+        
+        assert request.params == params
+        assert request.data == data
+    
+    def test_initializes_with_none_params_and_data(self):
+        """Test that params and data can be None."""
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers={"Content-Type": "application/json"},
+            params=None,
+            data=None
+        )
+        
+        assert request.params is None
+        assert request.data is None
+    
+    def test_initializes_with_default_params_and_data(self):
+        """Test that params and data default to None when not provided."""
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers={"Content-Type": "application/json"}
+        )
+        
+        assert request.params is None
+        assert request.data is None
+
+
+class Test_StreamingState_ParamsData_WithoutMocks:
+    """Test StreamingState params and data handling without mocks."""
+    
+    def test_streaming_state_with_params_and_data(self):
+        """Test that StreamingState properly stores params and data."""
+        params = {"query": "test", "page": 1}
+        data = {"user_id": 123, "action": "fetch"}
+        
+        state = StreamingState(
+            endpoint="https://api.example.com/data",
+            method="GET",
+            headers={"Accept": "application/json"},
+            params=params,
+            data=data,
+            accumulated_data=b"test data",
+            last_position=9
+        )
+        
+        assert state.params == params
+        assert state.data == data
+    
+    def test_streaming_state_serialization_with_params_and_data(self):
+        """Test that StreamingState serializes and deserializes params and data correctly."""
+        params = {"key": "value", "number": 42}
+        data = {"nested": {"field": "value"}, "list": [1, 2, 3]}
+        
+        state = StreamingState(
+            endpoint="https://api.example.com/data",
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            params=params,
+            data=data,
+            accumulated_data=b"accumulated",
+            last_position=11
+        )
+        
+        # Serialize to JSON
+        json_str = state.model_dump_json()
+        
+        # Deserialize back
+        restored_state = StreamingState.model_validate_json(json_str)
+        
+        assert restored_state.params == params
+        assert restored_state.data == data
+        assert restored_state.accumulated_data == b"accumulated"
+
+
+class Test_AbstractStreamingRequest_SaveLoadState_WithoutMocks:
+    """Test save_state and load_state methods without using mocks."""
+    
+    def test_save_and_load_state_with_params_and_data(self, tmp_path):
+        """Test that save_state and load_state properly handle params and data."""
+        # Create a state file path
+        state_file = tmp_path / "test_state.json"
+        
+        # Create request with params and data
+        params = {"search": "test query", "limit": 50}
+        data = {"request_type": "streaming", "priority": "high"}
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/stream",
+            headers={"X-Custom-Header": "value"},
+            params=params,
+            data=data,
+            state_file=str(state_file),
+            request_id="test-123"
+        )
+        
+        # Set some state
+        request.accumulated_data = bytearray(b"Some test data")
+        request.position = 14
+        request.total_size = 1000
+        request.etag = "etag-abc123"
+        
+        # Save state
+        request.save_state()
+        
+        # Verify file was created
+        assert state_file.exists()
+        
+        # Create a new request and load state
+        new_request = DummyStreamingRequest(
+            endpoint="",  # Will be overwritten by load_state
+            headers={},
+            state_file=str(state_file)
+        )
+        
+        state = new_request.load_state()
+        
+        # Verify state was loaded correctly
+        assert state is not None
+        assert new_request.endpoint == "https://api.example.com/stream"
+        assert new_request.params == params
+        assert new_request.data == data
+        assert bytes(new_request.accumulated_data) == b"Some test data"
+        assert new_request.position == 14
+        assert new_request.total_size == 1000
+        assert new_request.etag == "etag-abc123"
+        assert new_request.request_id == "test-123"
+    
+    def test_save_state_creates_directory(self, tmp_path):
+        """Test that save_state creates parent directories if needed."""
+        # Create a nested path that doesn't exist
+        state_file = tmp_path / "subdir" / "nested" / "state.json"
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers={"Accept": "application/json"},
+            params={"test": "param"},
+            data={"test": "data"},
+            state_file=str(state_file)
+        )
+        
+        # Save state
+        request.save_state()
+        
+        # Verify file and directories were created
+        assert state_file.exists()
+        assert state_file.parent.exists()
+    
+    def test_load_state_with_missing_file(self, tmp_path):
+        """Test that load_state returns None when file doesn't exist."""
+        state_file = tmp_path / "nonexistent.json"
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers={},
+            state_file=str(state_file)
+        )
+        
+        state = request.load_state()
+        assert state is None
+
+
+class Test_AbstractStreamingRequest_AuthHeaderPurging_WithoutMocks:
+    """Test authentication header purging without mocks."""
+    
+    def test_purges_common_auth_headers(self, tmp_path):
+        """Test that common authentication headers are purged before saving."""
+        state_file = tmp_path / "auth_test.json"
+        
+        # Create request with various auth headers
+        sensitive_headers = {
+            "Authorization": "Bearer secret-token-123",
+            "X-API-Key": "api-key-secret",
+            "X-Auth-Token": "auth-token-secret",
+            "Cookie": "session=secret-session-id",
+            "X-Access-Token": "access-secret",
+            "Proxy-Authorization": "Basic proxy-secret",
+            "Content-Type": "application/json",  # Non-auth header
+            "Accept": "application/json",  # Non-auth header
+            "User-Agent": "TestClient/1.0"  # Non-auth header
+        }
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/secure",
+            headers=sensitive_headers,
+            params={"page": 1},
+            state_file=str(state_file),
+            request_id="auth-test"
+        )
+        
+        # Save state
+        request.save_state()
+        
+        # Read the saved file directly
+        with open(state_file, 'r') as f:
+            saved_data = json.load(f)
+        
+        # Verify auth headers were purged
+        saved_headers = saved_data["headers"]
+        assert "Authorization" not in saved_headers
+        assert "X-API-Key" not in saved_headers
+        assert "X-Auth-Token" not in saved_headers
+        assert "Cookie" not in saved_headers
+        assert "X-Access-Token" not in saved_headers
+        assert "Proxy-Authorization" not in saved_headers
+        
+        # Verify non-auth headers were preserved
+        assert saved_headers["Content-Type"] == "application/json"
+        assert saved_headers["Accept"] == "application/json"
+        assert saved_headers["User-Agent"] == "TestClient/1.0"
+    
+    def test_purges_case_insensitive_auth_headers(self, tmp_path):
+        """Test that auth headers are purged regardless of case."""
+        state_file = tmp_path / "case_test.json"
+        
+        # Mix of different cases
+        headers = {
+            "AUTHORIZATION": "Bearer token",
+            "x-api-key": "secret",
+            "X-AUTH-TOKEN": "secret",
+            "Api-Key": "secret",
+            "authorization": "another-secret",
+            "Host": "api.example.com",  # Non-auth header
+            "Content-Length": "123"  # Non-auth header
+        }
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers=headers,
+            state_file=str(state_file)
+        )
+        
+        request.save_state()
+        
+        # Read saved file
+        with open(state_file, 'r') as f:
+            saved_data = json.load(f)
+        
+        saved_headers = saved_data["headers"]
+        
+        # All auth headers should be purged
+        assert "AUTHORIZATION" not in saved_headers
+        assert "x-api-key" not in saved_headers
+        assert "X-AUTH-TOKEN" not in saved_headers
+        assert "Api-Key" not in saved_headers
+        assert "authorization" not in saved_headers
+        
+        # Non-auth headers should remain
+        assert saved_headers["Host"] == "api.example.com"
+        assert saved_headers["Content-Length"] == "123"
+    
+    def test_purges_all_defined_auth_headers(self, tmp_path):
+        """Test that all auth headers defined in AUTH_HEADERS_TO_PURGE are purged."""
+        state_file = tmp_path / "comprehensive_test.json"
+        
+        # Create headers with all the auth header types
+        headers = {
+            "authorization": "Bearer token",
+            "x-api-key": "key1",
+            "x-auth-token": "token1",
+            "api-key": "key2",
+            "x-access-token": "token2",
+            "x-token": "token3",
+            "x-session-token": "session1",
+            "cookie": "session=abc",
+            "x-csrf-token": "csrf1",
+            "x-client-secret": "secret1",
+            "proxy-authorization": "Basic xyz",
+            "x-amz-security-token": "aws-token",
+            "x-goog-api-key": "google-key",
+            "apikey": "key3",
+            "auth-token": "token4",
+            "authentication": "custom",
+            "x-authentication": "custom2",
+            "x-authorization": "custom3",
+            "access-token": "token5",
+            "secret-key": "secret2",
+            "private-key": "private1",
+            "x-secret-key": "secret3",
+            "x-private-key": "private2",
+            "bearer": "token6",
+            "oauth-token": "oauth1",
+            "x-oauth-token": "oauth2",
+            "Custom-Header": "not-secret"  # Non-auth header
+        }
+        
+        request = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers=headers,
+            state_file=str(state_file)
+        )
+        
+        request.save_state()
+        
+        # Read saved file
+        with open(state_file, 'r') as f:
+            saved_data = json.load(f)
+        
+        saved_headers = saved_data["headers"]
+        
+        # Verify all auth headers are gone
+        for header in AbstractStreamingRequest.AUTH_HEADERS_TO_PURGE:
+            assert header not in saved_headers
+        
+        # Verify non-auth header remains
+        assert saved_headers["Custom-Header"] == "not-secret"
+    
+    def test_load_state_handles_purged_headers(self, tmp_path):
+        """Test that load_state works correctly even with purged headers."""
+        state_file = tmp_path / "purged_test.json"
+        
+        # Create and save state with auth headers
+        original_headers = {
+            "Authorization": "Bearer secret",
+            "Content-Type": "application/json"
+        }
+        
+        request1 = DummyStreamingRequest(
+            endpoint="https://api.example.com/data",
+            headers=original_headers,
+            params={"test": "value"},
+            state_file=str(state_file)
+        )
+        request1.accumulated_data = bytearray(b"test data")
+        request1.position = 9
+        
+        request1.save_state()
+        
+        # Load state in new request
+        request2 = DummyStreamingRequest(
+            endpoint="",
+            headers={},
+            state_file=str(state_file)
+        )
+        
+        state = request2.load_state()
+        
+        # Verify state loaded correctly
+        assert state is not None
+        assert request2.endpoint == "https://api.example.com/data"
+        assert "Authorization" not in request2.headers  # Auth header was purged
+        assert request2.headers["Content-Type"] == "application/json"  # Non-auth header preserved
+        assert request2.params == {"test": "value"}
+        assert bytes(request2.accumulated_data) == b"test data"
+        assert request2.position == 9

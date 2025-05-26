@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from smartsurge.models import HMMParams
+from smartsurge.hmm import HMMParams
 
 
 class Test_HMMParams_ValidateArrayDimensions_01_NominalBehaviors:

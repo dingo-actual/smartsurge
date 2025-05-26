@@ -1,13 +1,12 @@
 import aiohttp
-import asyncio
 from datetime import datetime, timezone
+import logging
 import pytest
 from pydantic import ValidationError
 import requests
 from unittest.mock import patch, MagicMock, call
 from urllib3.util.retry import Retry
 
-from smartsurge import exceptions
 from smartsurge.client import ClientConfig, SmartSurgeClient
 from smartsurge.exceptions import RateLimitExceeded, ResumeError, StreamingError
 from smartsurge.models import RequestEntry, RequestHistory, RequestMethod, SearchStatus
@@ -32,7 +31,11 @@ class Test_ClientConfig_Initialization_01_NominalBehaviors:
         assert config.verify_ssl is True
         assert config.min_time_period == 1.0
         assert config.max_time_period == 3600.0
-        assert config.confidence_threshold == 0.9
+        assert config.user_agent == "SmartSurge/0.0.5"
+        assert config.max_connections == 10
+        assert config.keep_alive is True
+        assert config.max_pool_size == 10
+        assert config.log_level == logging.INFO
 
     def test_init_with_custom_parameters(self):
         """Initialize with custom parameters correctly stores provided values."""
@@ -44,7 +47,6 @@ class Test_ClientConfig_Initialization_01_NominalBehaviors:
             verify_ssl=False,
             min_time_period=2.0,
             max_time_period=1800.0,
-            confidence_threshold=0.8
         )
         assert config.base_url == "https://api.example.com"
         assert config.timeout == (5.0, 15.0)
@@ -53,7 +55,6 @@ class Test_ClientConfig_Initialization_01_NominalBehaviors:
         assert config.verify_ssl is False
         assert config.min_time_period == 2.0
         assert config.max_time_period == 1800.0
-        assert config.confidence_threshold == 0.8
 
     def test_field_validation_with_valid_inputs(self):
         """All fields properly validate correct inputs."""
@@ -61,12 +62,10 @@ class Test_ClientConfig_Initialization_01_NominalBehaviors:
             timeout=15.0,  # Should convert to tuple
             max_retries=10,
             backoff_factor=10.0,
-            confidence_threshold=1.0
         )
         assert config.timeout == (15.0, 15.0)
         assert config.max_retries == 10
         assert config.backoff_factor == 10.0
-        assert config.confidence_threshold == 1.0
 
     def test_serialization_via_model_dump(self):
         """Serialization via model_dump produces expected output."""
@@ -120,8 +119,7 @@ class Test_ClientConfig_Initialization_02_NegativeBehaviors:
         with pytest.raises(ValidationError):
             ClientConfig(verify_ssl="yes")
 
-        with pytest.raises(ValidationError):
-            ClientConfig(confidence_threshold="high")
+            pass  # Removed confidence_threshold test
 
 
 class Test_ClientConfig_Initialization_03_BoundaryBehaviors:
@@ -135,13 +133,7 @@ class Test_ClientConfig_Initialization_03_BoundaryBehaviors:
         config = ClientConfig(timeout=(0.000001, 0.000001))
         assert config.timeout == (0.000001, 0.000001)
 
-    def test_confidence_threshold_at_boundaries(self):
-        """Confidence threshold set exactly to boundaries (0.0 or 1.0)."""
-        config = ClientConfig(confidence_threshold=0.0)
-        assert config.confidence_threshold == 0.0
 
-        config = ClientConfig(confidence_threshold=1.0)
-        assert config.confidence_threshold == 1.0
 
     def test_max_retries_at_max_value(self):
         """max_retries set to maximum allowed value (10)."""
@@ -182,13 +174,11 @@ class Test_ClientConfig_Initialization_04_ErrorHandlingBehaviors:
             ClientConfig(
                 timeout=-5.0,
                 max_retries=11,
-                confidence_threshold=2.0
             )
         except ValidationError as e:
             error_str = str(e)
             assert "Timeout" in error_str
             assert "max_retries" in error_str
-            assert "confidence_threshold" in error_str
 
 
 class Test_ClientConfig_FieldValidators_01_NominalBehaviors:
@@ -322,25 +312,21 @@ class Test_SmartSurgeClient_Init_03_BoundaryBehaviors:
             backoff_factor=0.0,
             min_time_period=0.001,
             max_time_period=0.001,
-            confidence_threshold=0.0
         )
         assert client.config.timeout == (0.001, 0.001)
         assert client.config.max_retries == 0
         assert client.config.backoff_factor == 0.0
         assert client.config.min_time_period == 0.001
         assert client.config.max_time_period == 0.001
-        assert client.config.confidence_threshold == 0.0
 
     def test_initialize_with_maximum_values(self):
         """Initialize with maximum valid values for numeric parameters."""
         client = SmartSurgeClient(
             max_retries=10,
             backoff_factor=10.0,
-            confidence_threshold=1.0
         )
         assert client.config.max_retries == 10
         assert client.config.backoff_factor == 10.0
-        assert client.config.confidence_threshold == 1.0
 
     def test_empty_base_url_handling(self):
         """Empty base_url is handled appropriately."""
@@ -584,26 +570,11 @@ class Test_SmartSurgeClient_GetOrCreateHistory_01_NominalBehaviors:
         client = SmartSurgeClient()
         
         endpoint = "users"
-        history = client._get_or_create_history(endpoint, "GET", 0.9)
+        history = client._get_or_create_history(endpoint, "GET")
         
         assert history.method == RequestMethod.GET
         assert (endpoint, RequestMethod.GET) in client.histories
 
-    def test_creates_history_with_proper_confidence(self):
-        """Creates history with appropriate confidence threshold."""
-        client = SmartSurgeClient(confidence_threshold=0.8)
-        
-        # Use default confidence from client
-        endpoint = "users"
-        method = RequestMethod.GET
-        history = client._get_or_create_history(endpoint, method, None)
-        assert history.confidence_threshold == 0.8
-        
-        # Use custom confidence
-        endpoint = "products"
-        method = RequestMethod.GET
-        history = client._get_or_create_history(endpoint, method, 0.95)
-        assert history.confidence_threshold == 0.95
 
 
 class Test_SmartSurgeClient_GetOrCreateHistory_02_NegativeBehaviors:
@@ -655,7 +626,8 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
             method=RequestMethod.GET,
             endpoint="users",
             params={"page": 1},
-            headers={"Accept": "application/json"}
+            headers={"Accept": "application/json"},
+            return_history=True
         )
         
         assert response == mock_response
@@ -674,7 +646,8 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         client = SmartSurgeClient()
         response, history = client.request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         assert len(history.entries) == 1
@@ -695,7 +668,8 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         client = SmartSurgeClient()
         response, history = client.request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify that intercept_request was called to apply rate limiting
@@ -721,7 +695,8 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         client = SmartSurgeClient()
         response, history = client.request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify sleep was called with Retry-After value
@@ -752,7 +727,8 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         response, history = client.request(
             method=RequestMethod.GET,
             endpoint="users",
-            request_history=mock_history
+            request_history=mock_history,
+            return_history=True
         )
         
         # Verify history's methods were used
@@ -781,7 +757,8 @@ class Test_SmartSurgeClient_Request_02_NegativeBehaviors:
         client = SmartSurgeClient()
         response, history = client.request(
             method=RequestMethod.GET,
-            endpoint="nonexistent"
+            endpoint="nonexistent",
+            return_history=True
         )
         
         assert len(history.entries) == 1
@@ -807,7 +784,8 @@ class Test_SmartSurgeClient_Request_03_BoundaryBehaviors:
             method=RequestMethod.GET,
             endpoint="users",
             params={},
-            headers={}
+            headers={},
+            return_history=True
         )
         assert mock_request.call_count == 1
         
@@ -817,7 +795,8 @@ class Test_SmartSurgeClient_Request_03_BoundaryBehaviors:
             method=RequestMethod.GET,
             endpoint="users",
             params=None,
-            headers=None
+            headers=None,
+            return_history=True
         )
         assert mock_request.call_count == 1
 
@@ -924,7 +903,8 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         # First request - should set search_status to WAITING_TO_ESTIMATE
         response, history = client.request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         assert history.search_status == SearchStatus.WAITING_TO_ESTIMATE
         
@@ -955,7 +935,8 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         # Second request - should update search_status to COMPLETED
         response, history2 = client.request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify results
@@ -1005,7 +986,8 @@ class Test_SmartSurgeClient_StreamRequest_01_NominalBehaviors:
         client = SmartSurgeClient()
         result, history = client.stream_request(
             streaming_class=mock_stream_class,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify streaming class was instantiated correctly
@@ -1025,7 +1007,8 @@ class Test_SmartSurgeClient_StreamRequest_01_NominalBehaviors:
         client = SmartSurgeClient()
         result, history = client.stream_request(
             streaming_class=mock_stream_class,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify result is correct
@@ -1043,7 +1026,8 @@ class Test_SmartSurgeClient_StreamRequest_01_NominalBehaviors:
         client = SmartSurgeClient()
         result, history = client.stream_request(
             streaming_class=mock_stream_class,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify entry was added to history
@@ -1065,7 +1049,8 @@ class Test_SmartSurgeClient_StreamRequest_01_NominalBehaviors:
             result, history = client.stream_request(
                 streaming_class=mock_stream_class,
                 endpoint="users",
-                state_file="users.state"
+                state_file="users.state",
+                return_history=True
             )
             
             # Verify resume was called instead of start
@@ -1083,7 +1068,8 @@ class Test_SmartSurgeClient_StreamRequest_01_NominalBehaviors:
         client = SmartSurgeClient()
         result, history = client.stream_request(
             streaming_class=mock_stream_class,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify intercept_request was called to apply rate limiting
@@ -1107,7 +1093,8 @@ class Test_SmartSurgeClient_StreamRequest_02_NegativeBehaviors:
             result, history = client.stream_request(
                 streaming_class=mock_stream_class,
                 endpoint="users",
-                state_file="users.state"
+                state_file="users.state",
+                return_history=True
             )
         
         # Verify save_state was called
@@ -1130,7 +1117,8 @@ class Test_SmartSurgeClient_StreamRequest_04_ErrorHandlingBehaviors:
         with pytest.raises(StreamingError):
             result, history = client.stream_request(
                 streaming_class=mock_stream_class,
-                endpoint="users"
+                endpoint="users",
+                return_history=True
             )
         
         # Get history and verify failure was recorded
@@ -1151,7 +1139,8 @@ class Test_SmartSurgeClient_StreamRequest_04_ErrorHandlingBehaviors:
         with pytest.raises(StreamingError) as excinfo:
             result, history = client.stream_request(
                 streaming_class=mock_stream_class,
-                endpoint="users"
+                endpoint="users",
+                return_history=True
             )
         
         # Verify exception contains the original error message
@@ -1179,7 +1168,8 @@ class Test_SmartSurgeClient_StreamRequest_04_ErrorHandlingBehaviors:
             client = SmartSurgeClient()
             result, history = client.stream_request(
                 streaming_class=mock_stream_class,
-                endpoint="users"
+                endpoint="users",
+                return_history=True
             )
             
             # Verify sleep was called with Retry-After value
@@ -1229,7 +1219,8 @@ class Test_SmartSurgeClient_StreamRequest_05_StateTransitionBehaviors:
         result, history = client.stream_request(
             streaming_class=mock_stream_class,
             endpoint="users",
-            state_file="users.state"
+            state_file="users.state",
+            return_history=True
         )
         
         # In a real streaming operation, save_state would be called
@@ -1253,7 +1244,8 @@ class Test_SmartSurgeClient_StreamRequest_05_StateTransitionBehaviors:
         client = SmartSurgeClient()
         result, history = client.stream_request(
             streaming_class=mock_stream_class,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify completion state
@@ -1491,7 +1483,8 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         response, history = await client.async_request(
             method=RequestMethod.GET,
             endpoint="users",
-            params={"page": 1}
+            params={"page": 1},
+            return_history=True
         )
         
         # Verify request was made with correct parameters
@@ -1566,7 +1559,8 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         client = SmartSurgeClient()
         response, history = await client.async_request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify entry was added to history
@@ -1592,7 +1586,8 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         client = SmartSurgeClient()
         response, history = await client.async_request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify intercept_request was called to apply rate limiting
@@ -1704,7 +1699,8 @@ class Test_SmartSurgeClient_AsyncMethods_04_ErrorHandlingBehaviors:
             client = SmartSurgeClient()
             response, history = await client.async_request(
                 method=RequestMethod.GET,
-                endpoint="users"
+                endpoint="users",
+                return_history=True
             )
             
             # Verify sleep was called with Retry-After value
@@ -1733,7 +1729,8 @@ class Test_SmartSurgeClient_AsyncMethods_04_ErrorHandlingBehaviors:
         client = SmartSurgeClient()
         response, history = await client.async_request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         
         # Verify read was called to ensure complete body reading
@@ -1762,7 +1759,8 @@ class Test_SmartSurgeClient_AsyncMethods_05_StateTransitionBehaviors:
         # First request - should set search_status to WAITING_TO_ESTIMATE
         response, history = await client.async_request(
             method=RequestMethod.GET,
-            endpoint="users"
+            endpoint="users",
+            return_history=True
         )
         assert history.search_status == SearchStatus.WAITING_TO_ESTIMATE
         
@@ -1771,7 +1769,8 @@ class Test_SmartSurgeClient_AsyncMethods_05_StateTransitionBehaviors:
             response, history = await client.async_request(
                 method=RequestMethod.GET,
                 endpoint="users",
-                request_history=history  # Ensure same history object is used
+                request_history=history,  # Ensure same history object is used
+                return_history=True
             )
             assert history.search_status == SearchStatus.COMPLETED
 
