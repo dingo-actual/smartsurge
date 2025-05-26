@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock, call
 from urllib3.util.retry import Retry
 
 from smartsurge.client import ClientConfig, SmartSurgeClient
-from smartsurge.exceptions import RateLimitExceeded, ResumeError, StreamingError
-from smartsurge.models import RequestEntry, RequestHistory, RequestMethod, SearchStatus
+from smartsurge.exceptions import RateLimitExceeded, StreamingError, ResumeError
+from smartsurge.models import RequestEntry, RequestHistory, ResponseType, SearchStatus, RequestMethod
 
 
 class AsyncMock(MagicMock):
@@ -118,8 +118,6 @@ class Test_ClientConfig_Initialization_02_NegativeBehaviors:
 
         with pytest.raises(ValidationError):
             ClientConfig(verify_ssl="yes")
-
-            pass  # Removed confidence_threshold test
 
 
 class Test_ClientConfig_Initialization_03_BoundaryBehaviors:
@@ -250,29 +248,29 @@ class Test_SmartSurgeClient_Init_01_NominalBehaviors:
         assert client.histories == {}
 
     def test_init_with_custom_parameters(self):
-        """Custom parameters including rate_limit are correctly stored and applied."""
-        rate_limit = {"requests": 100, "period": 60.0}
+        """Custom parameters are correctly stored and applied."""
+        import logging
         client = SmartSurgeClient(
             base_url="https://api.example.com",
             timeout=(5.0, 15.0),
-            rate_limit=rate_limit,
             max_retries=5,
-            log_level=10  # DEBUG level
+            log_level=logging.DEBUG
         )
         assert client.config.base_url == "https://api.example.com"
         assert client.config.timeout == (5.0, 15.0)
         assert client.config.max_retries == 5
-        assert client.user_rate_limit == rate_limit
-        assert client.logger.level == 10
+        assert client.logger.level == logging.DEBUG
 
     def test_logger_configuration(self):
         """Logger is properly configured with specified or default log level."""
         client = SmartSurgeClient()
         assert client.logger.level == client.config.log_level
 
-        import logging
-        client = SmartSurgeClient(log_level=logging.DEBUG)
-        assert client.logger.level == logging.DEBUG
+        # Test with custom logger
+        custom_logger = logging.getLogger("test_logger")
+        custom_logger.setLevel(logging.WARNING)
+        client = SmartSurgeClient(logger=custom_logger)
+        assert client.logger.level == logging.WARNING
         
     @patch("requests.Session")
     def test_session_creation(self, mock_session):
@@ -347,20 +345,19 @@ class Test_SmartSurgeClient_Init_04_ErrorHandlingBehaviors:
             SmartSurgeClient()
 
 
-class Test_SmartSurgeClient_Init_05_StateTransitionBehaviors:
+class Test_SmartSurgeClient_Init_05_RateLimitBehaviors:
     """Tests for state transition behaviors of SmartSurgeClient initialization."""
 
-    def test_rate_limit_hierarchy_initialization(self):
-        """Initial state has correct rate limit hierarchy (user-defined, response, adaptive)."""
-        # Without user-defined rate limit
+    def test_rate_limit_initialization(self):
+        """Initial state has correct rate limit configuration."""
+        # Without user rate limit
         client = SmartSurgeClient()
         assert client.user_rate_limit is None
         assert client.response_rate_limit is None
         
-        # With user-defined rate limit
-        rate_limit = {"requests": 100, "period": 60.0}
-        client = SmartSurgeClient(rate_limit=rate_limit)
-        assert client.user_rate_limit == rate_limit
+        # With user rate limit
+        client = SmartSurgeClient(rate_limit={"requests": 100, "period": 60.0})
+        assert client.user_rate_limit == {"requests": 100, "period": 60.0}
         assert client.response_rate_limit is None
 
 
@@ -544,11 +541,11 @@ class Test_SmartSurgeClient_GetOrCreateHistory_01_NominalBehaviors:
         
         # Create history first
         endpoint = "users"
-        method = RequestMethod.GET
-        history1 = client._get_or_create_history(endpoint, method, 0.9)
+        method = "GET"
+        history1 = client._get_or_create_history(endpoint, method)
         
         # Should return the same history object
-        history2 = client._get_or_create_history(endpoint, method, 0.9)
+        history2 = client._get_or_create_history(endpoint, method)
         assert history1 is history2
         assert client.histories[(endpoint, method)] is history1
 
@@ -557,8 +554,8 @@ class Test_SmartSurgeClient_GetOrCreateHistory_01_NominalBehaviors:
         client = SmartSurgeClient()
         
         endpoint = "users"
-        method = RequestMethod.GET
-        history = client._get_or_create_history(endpoint, method, 0.9)
+        method = "GET"
+        history = client._get_or_create_history(endpoint, method)
         
         assert isinstance(history, RequestHistory)
         assert history.endpoint == endpoint
@@ -572,8 +569,8 @@ class Test_SmartSurgeClient_GetOrCreateHistory_01_NominalBehaviors:
         endpoint = "users"
         history = client._get_or_create_history(endpoint, "GET")
         
-        assert history.method == RequestMethod.GET
-        assert (endpoint, RequestMethod.GET) in client.histories
+        assert history.method == "GET"
+        assert (endpoint, "GET") in client.histories
 
 
 
@@ -585,7 +582,7 @@ class Test_SmartSurgeClient_GetOrCreateHistory_02_NegativeBehaviors:
         client = SmartSurgeClient()
         
         with pytest.raises(ValueError, match="Invalid HTTP method"):
-            client._get_or_create_history("users", "INVALID_METHOD", 0.9)
+            client._get_or_create_history("users", "INVALID_METHOD")
 
 
 class Test_SmartSurgeClient_GetOrCreateHistory_05_StateTransitionBehaviors:
@@ -597,16 +594,16 @@ class Test_SmartSurgeClient_GetOrCreateHistory_05_StateTransitionBehaviors:
         
         assert len(client.histories) == 0
         
-        client._get_or_create_history("users", RequestMethod.GET, 0.9)
+        client._get_or_create_history("users", "GET")
         assert len(client.histories) == 1
-        assert ("users", RequestMethod.GET) in client.histories
+        assert ("users", "GET") in client.histories
         
-        client._get_or_create_history("products", RequestMethod.POST, 0.9)
+        client._get_or_create_history("products", "POST")
         assert len(client.histories) == 2
-        assert ("products", RequestMethod.POST) in client.histories
+        assert ("products", "POST") in client.histories
         
         # Adding same endpoint/method doesn't create new history
-        client._get_or_create_history("users", RequestMethod.GET, 0.9)
+        client._get_or_create_history("users", "GET")
         assert len(client.histories) == 2
 
 
@@ -623,7 +620,7 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
 
         client = SmartSurgeClient()
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             params={"page": 1},
             headers={"Accept": "application/json"},
@@ -633,7 +630,7 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         assert response == mock_response
         assert isinstance(history, RequestHistory)
         assert history.endpoint == "users"
-        assert history.method == RequestMethod.GET
+        assert history.method == "GET"
 
     @patch("requests.Session.request")
     def test_records_successful_request_in_history(self, mock_request):
@@ -645,14 +642,14 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
 
         client = SmartSurgeClient()
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
         
         assert len(history.entries) == 1
         assert history.entries[0].endpoint == "users"
-        assert history.entries[0].method == RequestMethod.GET
+        assert history.entries[0].method == "GET"
         assert history.entries[0].status_code == 200
         assert history.entries[0].success is True
 
@@ -667,7 +664,7 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         
         client = SmartSurgeClient()
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -694,7 +691,7 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         
         client = SmartSurgeClient()
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -725,7 +722,7 @@ class Test_SmartSurgeClient_Request_01_NominalBehaviors:
         mock_history.request_id = "mock-request-id"
         
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             request_history=mock_history,
             return_history=True
@@ -756,7 +753,7 @@ class Test_SmartSurgeClient_Request_02_NegativeBehaviors:
         
         client = SmartSurgeClient()
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="nonexistent",
             return_history=True
         )
@@ -781,7 +778,7 @@ class Test_SmartSurgeClient_Request_03_BoundaryBehaviors:
         
         # Empty dictionaries
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             params={},
             headers={},
@@ -792,7 +789,7 @@ class Test_SmartSurgeClient_Request_03_BoundaryBehaviors:
         # None values
         mock_request.reset_mock()
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             params=None,
             headers=None,
@@ -813,12 +810,12 @@ class Test_SmartSurgeClient_Request_04_ErrorHandlingBehaviors:
         
         with pytest.raises(requests.RequestException):
             client.request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
         # Verify there's an entry in the history
-        history = client._get_or_create_history("users", RequestMethod.GET, None)
+        history = client._get_or_create_history("users", "GET")
         assert len(history.entries) == 1
         assert history.entries[0].success is False
         assert history.entries[0].status_code == 0
@@ -833,7 +830,7 @@ class Test_SmartSurgeClient_Request_04_ErrorHandlingBehaviors:
         
         with pytest.raises(requests.RequestException) as excinfo:
             client.request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
@@ -854,7 +851,7 @@ class Test_SmartSurgeClient_Request_04_ErrorHandlingBehaviors:
         # Should raise RateLimitExceeded without crashing
         with pytest.raises(RateLimitExceeded):
             client.request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
 
@@ -871,13 +868,13 @@ class Test_SmartSurgeClient_Request_04_ErrorHandlingBehaviors:
         
         with pytest.raises(RateLimitExceeded) as excinfo:
             client.request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
         # Verify exception has correct information
         assert excinfo.value.endpoint == "users"
-        assert excinfo.value.method == RequestMethod.GET
+        assert excinfo.value.method == "GET"
         assert excinfo.value.retry_after is None
 
 
@@ -902,7 +899,7 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         
         # First request - should set search_status to WAITING_TO_ESTIMATE
         response, history = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -913,7 +910,7 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         for i in range(history.min_data_points - 1):
             entry = RequestEntry(
                 endpoint="users",
-                method=RequestMethod.GET,
+                method="GET",
                 timestamp=datetime.now(timezone.utc),
                 status_code=200,
                 response_time=0.1,
@@ -924,7 +921,7 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         # Add one failed request to ensure we have at least one failure
         entry = RequestEntry(
             endpoint="users",
-            method=RequestMethod.GET,
+            method="GET",
             timestamp=datetime.now(timezone.utc),
             status_code=400,
             response_time=0.1,
@@ -934,7 +931,7 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         
         # Second request - should update search_status to COMPLETED
         response, history2 = client.request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -961,12 +958,12 @@ class Test_SmartSurgeClient_Request_05_StateTransitionBehaviors:
         # Should raise RateLimitExceeded
         with pytest.raises(RateLimitExceeded):
             client.request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
         # Verify the history was updated
-        history = client._get_or_create_history("users", RequestMethod.GET, None)
+        history = client._get_or_create_history("users", "GET")
         assert len(history.entries) == 1
         assert history.entries[0].status_code == 429
         # Check if consecutive_refusals was incremented
@@ -1033,7 +1030,7 @@ class Test_SmartSurgeClient_StreamRequest_01_NominalBehaviors:
         # Verify entry was added to history
         assert len(history.entries) == 1
         assert history.entries[0].endpoint == "users"
-        assert history.entries[0].method == RequestMethod.GET
+        assert history.entries[0].method == "GET"
         assert history.entries[0].success is True
 
     def test_supports_resuming_from_state_file(self):
@@ -1122,7 +1119,7 @@ class Test_SmartSurgeClient_StreamRequest_04_ErrorHandlingBehaviors:
             )
         
         # Get history and verify failure was recorded
-        history = client._get_or_create_history("users", RequestMethod.GET, None)
+        history = client._get_or_create_history("users", "GET")
         assert len(history.entries) == 1
         assert history.entries[0].success is False
 
@@ -1300,7 +1297,7 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         mock_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = client.get("users", params={"page": 1})
+        response, history = client.get("users", params={"page": 1}, return_history=True)
         
         # Verify request was called with GET
         mock_request.assert_called_once()
@@ -1314,7 +1311,7 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         mock_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = client.post("users", json={"name": "John"})
+        response, history = client.post("users", json={"name": "John"}, return_history=True)
         
         # Verify request was called with POST
         mock_request.assert_called_once()
@@ -1328,7 +1325,7 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         mock_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = client.put("users/1", json={"name": "John"})
+        response, history = client.put("users/1", json={"name": "John"}, return_history=True)
         
         # Verify request was called with PUT
         mock_request.assert_called_once()
@@ -1342,7 +1339,7 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         mock_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = client.delete("users/1")
+        response, history = client.delete("users/1", return_history=True)
         
         # Verify request was called with DELETE
         mock_request.assert_called_once()
@@ -1356,7 +1353,7 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         mock_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = client.patch("users/1", json={"name": "John"})
+        response, history = client.patch("users/1", json={"name": "John"}, return_history=True)
         
         # Verify request was called with PATCH
         mock_request.assert_called_once()
@@ -1374,7 +1371,8 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
             "users", 
             params={"page": 1}, 
             headers={"Accept": "application/json"},
-            timeout=30.0
+            timeout=30.0,
+            return_history=True
         )
         
         # Verify all parameters were passed through
@@ -1391,7 +1389,7 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         mock_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = client.get("users")
+        response, history = client.get("users", return_history=True)
         
         # Verify returned values match what request returned
         assert response == mock_response
@@ -1410,7 +1408,8 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
         response, history = client.get(
             "users",
             params={"page": 1},
-            headers={"Accept": "application/json"}
+            headers={"Accept": "application/json"},
+            return_history=True
         )
         
         # Test with additional keyword arguments
@@ -1420,7 +1419,8 @@ class Test_SmartSurgeClient_ConvenienceMethods_01_NominalBehaviors:
             headers={"Accept": "application/json"},
             timeout=30.0,
             verify=False,
-            allow_redirects=False
+            allow_redirects=False,
+            return_history=True
         )
         
         # Verify all parameters were passed through to request
@@ -1481,7 +1481,7 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         
         client = SmartSurgeClient()
         response, history = await client.async_request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             params={"page": 1},
             return_history=True
@@ -1507,7 +1507,7 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         mock_async_request.return_value = (mock_response, mock_history)
         
         client = SmartSurgeClient()
-        response, history = await client.async_get("users", params={"page": 1})
+        response, history = await client.async_get("users", params={"page": 1}, return_history=True)
         
         # Verify async_request was called with GET method
         mock_async_request.assert_called_once()
@@ -1530,7 +1530,8 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         client = SmartSurgeClient()
         response, history = await client.async_post(
             "users",
-            json={"name": "John"}
+            json={"name": "John"},
+            return_history=True
         )
         
         # Verify async_request was called with POST method
@@ -1558,7 +1559,7 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         
         client = SmartSurgeClient()
         response, history = await client.async_request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -1566,7 +1567,7 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         # Verify entry was added to history
         assert len(history.entries) == 1
         assert history.entries[0].endpoint == "users"
-        assert history.entries[0].method == RequestMethod.GET
+        assert history.entries[0].method == "GET"
         assert history.entries[0].success is True
 
     @pytest.mark.asyncio
@@ -1585,7 +1586,7 @@ class Test_SmartSurgeClient_AsyncMethods_01_NominalBehaviors:
         
         client = SmartSurgeClient()
         response, history = await client.async_request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -1615,12 +1616,12 @@ class Test_SmartSurgeClient_AsyncMethods_02_NegativeBehaviors:
         client = SmartSurgeClient()
         with pytest.raises(aiohttp.ClientError):
             await client.async_request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
         # Get history and verify failure was recorded
-        history = client._get_or_create_history("users", RequestMethod.GET, None)
+        history = client._get_or_create_history("users", "GET")
         assert len(history.entries) == 1
         assert history.entries[0].success is False
 
@@ -1638,12 +1639,12 @@ class Test_SmartSurgeClient_AsyncMethods_04_ErrorHandlingBehaviors:
         client = SmartSurgeClient()
         with pytest.raises(aiohttp.ClientError):
             await client.async_request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
         # Get history and verify failure was recorded
-        history = client._get_or_create_history("users", RequestMethod.GET, None)
+        history = client._get_or_create_history("users", "GET")
         assert len(history.entries) == 1
         assert history.entries[0].success is False
         assert history.entries[0].status_code == 0
@@ -1658,7 +1659,7 @@ class Test_SmartSurgeClient_AsyncMethods_04_ErrorHandlingBehaviors:
         client = SmartSurgeClient()
         with pytest.raises(aiohttp.ClientError) as excinfo:
             await client.async_request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
@@ -1698,7 +1699,7 @@ class Test_SmartSurgeClient_AsyncMethods_04_ErrorHandlingBehaviors:
             
             client = SmartSurgeClient()
             response, history = await client.async_request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users",
                 return_history=True
             )
@@ -1728,7 +1729,7 @@ class Test_SmartSurgeClient_AsyncMethods_04_ErrorHandlingBehaviors:
         
         client = SmartSurgeClient()
         response, history = await client.async_request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -1758,7 +1759,7 @@ class Test_SmartSurgeClient_AsyncMethods_05_StateTransitionBehaviors:
         
         # First request - should set search_status to WAITING_TO_ESTIMATE
         response, history = await client.async_request(
-            method=RequestMethod.GET,
+            method="GET",
             endpoint="users",
             return_history=True
         )
@@ -1767,7 +1768,7 @@ class Test_SmartSurgeClient_AsyncMethods_05_StateTransitionBehaviors:
         with patch('smartsurge.models.RequestHistory.has_minimum_observations', return_value=True):
             # Second request - should update search_status to COMPLETED
             response, history = await client.async_request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users",
                 request_history=history,  # Ensure same history object is used
                 return_history=True
@@ -1800,12 +1801,12 @@ class Test_SmartSurgeClient_AsyncMethods_05_StateTransitionBehaviors:
         # Should raise RateLimitExceeded
         with pytest.raises(RateLimitExceeded):
             await client.async_request(
-                method=RequestMethod.GET,
+                method="GET",
                 endpoint="users"
             )
         
         # Verify the history was updated
-        history = client._get_or_create_history("users", RequestMethod.GET, None)
+        history = client._get_or_create_history("users", "GET")
         assert len(history.entries) == 1
         assert history.entries[0].status_code == 429
         # Check if consecutive_refusals was incremented
