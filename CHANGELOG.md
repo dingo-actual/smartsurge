@@ -54,3 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - StreamingState now properly includes required `chunk_size` field
 - Integration tests now correctly handle client method return values
+
+## [0.0.7] - 2025-05-18
+
+### Changed
+
+- Bump for new release

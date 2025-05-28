@@ -173,7 +173,7 @@ We welcome contributions! Please see our [Contributing Guide](https://github.com
 
 ## Version
 
-Current version: 0.0.6
+Current version: 0.0.7
 
 Check your installed version:
 ```python

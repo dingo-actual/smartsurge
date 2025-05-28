@@ -76,7 +76,7 @@ class ClientConfig(BaseModel):
     verify_ssl: bool = Field(default=True, strict=True)
     min_time_period: float = Field(default=1.0, gt=0.0)
     max_time_period: float = Field(default=3600.0, gt=0.0)
-    user_agent: str = Field(default="SmartSurge/0.0.6")
+    user_agent: str = Field(default="SmartSurge/0.0.7")
     max_connections: int = Field(default=10, ge=1)
     keep_alive: bool = True
     max_pool_size: int = Field(default=10, ge=1)

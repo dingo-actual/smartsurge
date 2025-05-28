@@ -31,7 +31,7 @@ class Test_ClientConfig_Initialization_01_NominalBehaviors:
         assert config.verify_ssl is True
         assert config.min_time_period == 1.0
         assert config.max_time_period == 3600.0
-        assert config.user_agent == "SmartSurge/0.0.6"
+        assert config.user_agent == "SmartSurge/0.0.7"
         assert config.max_connections == 10
         assert config.keep_alive is True
         assert config.max_pool_size == 10

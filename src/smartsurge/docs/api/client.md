@@ -563,7 +563,7 @@ The `ClientConfig` class centralizes all configuration options:
 | `verify_ssl` | `bool` | `True` | Verify SSL certificates |
 | `min_time_period` | `float` | `1.0` | Min rate limit window |
 | `max_time_period` | `float` | `3600.0` | Max rate limit window |
-| `user_agent` | `str` | `"SmartSurge/0.0.6"` | User agent string |
+| `user_agent` | `str` | `"SmartSurge/0.0.7"` | User agent string |
 | `max_connections` | `int` | `10` | Max connections |
 | `keep_alive` | `bool` | `True` | Keep connections alive |
 | `max_pool_size` | `int` | `10` | Connection pool size |
