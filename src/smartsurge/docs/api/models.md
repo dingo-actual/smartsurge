@@ -221,7 +221,8 @@ RequestHistory(
     hmm: Optional[HMM] = None,
     logger: Optional[logging.Logger] = None,
     refit_every: int = 10,
-    responses_since_refit: int = 0
+    responses_since_refit: int = 0,
+    model_disabled: bool = False
 )
 ```
 
@@ -242,6 +243,7 @@ RequestHistory(
 | `request_id` | `str` | auto | Unique ID for request tracking |
 | `hmm` | `Optional[HMM]` | auto | Hidden Markov Model instance |
 | `refit_every` | `int` | `10` | Responses between HMM refits (1-1000) |
+| `model_disabled` | `bool` | `False` | Whether HMM rate limit detection is disabled |
 
 #### Core Methods
 
@@ -302,6 +304,22 @@ Handles:
 - Consecutive refusal tracking with exponential backoff
 - HMM retraining when needed
 - Search status updates
+
+##### disable_model()
+
+Disable the HMM model for this history. When disabled, no rate limit estimation will be performed.
+
+```python
+def disable_model() -> None
+```
+
+##### enable_model()
+
+Enable the HMM model for this history. When enabled, rate limit estimation will be performed.
+
+```python
+def enable_model() -> None
+```
 
 #### Utility Methods
 
@@ -375,6 +393,39 @@ if history.rate_limit:
         time_period=60.0,
         source="manual"
     )
+
+# Disable HMM model if needed
+history.disable_model()
+print("HMM model disabled - no more rate limit estimation")
+
+# Re-enable later
+history.enable_model()
+print("HMM model re-enabled")
+```
+
+### Creating History with Model Disabled
+
+```python
+# Create history with HMM disabled from the start
+history = RequestHistory(
+    endpoint="/api/data",
+    method=RequestMethod.POST,
+    model_disabled=True  # No HMM estimation will occur
+)
+
+# All requests will be logged but no rate limit detection
+for i in range(20):
+    entry = RequestEntry(
+        endpoint="/api/data",
+        method=RequestMethod.POST,
+        status_code=200,
+        response_time=0.1,
+        success=True
+    )
+    history.add_request(entry)
+
+# No rate limit will be detected
+assert history.rate_limit is None
 ```
 
 ## Integration with Client

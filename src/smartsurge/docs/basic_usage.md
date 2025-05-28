@@ -482,6 +482,16 @@ client = SmartSurgeClient(
 _, history = client.get("/api/data", return_history=True)
 print(f"Search status: {history.search_status}")
 # NOT_STARTED -> WAITING_TO_ESTIMATE -> COMPLETED
+
+# Disable HMM detection entirely
+client_no_hmm = SmartSurgeClient(
+    model_disabled=True       # No rate limit detection, just logging
+)
+
+# Or disable/enable dynamically
+client.disable_model()        # Turn off HMM detection
+# ... make requests without rate limit detection ...
+client.enable_model()         # Turn HMM detection back on
 ```
 
 ## Next Steps

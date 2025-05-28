@@ -33,9 +33,13 @@ class TestSmartSurgeIntegration:
         all_histories = []
         for i in range(10):
             try:
-                resp, history = client.get("/api/test")
-                responses.append(resp)
-                all_histories.append(history)
+                resp = client.get("/api/test", return_history=True)
+                if isinstance(resp, tuple):
+                    response, history = resp
+                    responses.append(response)
+                    all_histories.append(history)
+                else:
+                    responses.append(resp)
             except Exception as e:
                 # SmartSurge should handle rate limits gracefully
                 pass
@@ -75,8 +79,11 @@ class TestSmartSurgeIntegration:
         # Make concurrent async requests
         async def make_request(i):
             try:
-                resp, history = await client.async_get(f"/api/data/{i}")
-                return resp
+                resp = await client.async_get(f"/api/data/{i}", return_history=True)
+                if isinstance(resp, tuple):
+                    return resp[0]
+                else:
+                    return resp
             except Exception:
                 return None
         
@@ -102,18 +109,18 @@ class TestSmartSurgeIntegration:
         client = SmartSurgeClient(base_url="http://127.0.0.1:5565")
         
         # First stream should work
-        response, _ = client.get("/api/stream", stream=True)
+        response = client.get("/api/stream", stream=True)
         chunks = list(response.iter_content(chunk_size=1024))
         assert len(chunks) > 0
         
         # Second stream should also work (within limit)
-        response, _ = client.get("/api/stream", stream=True)
+        response = client.get("/api/stream", stream=True)
         chunks = list(response.iter_content(chunk_size=1024))
         assert len(chunks) > 0
         
         # Third attempt might be rate limited
         try:
-            response, _ = client.get("/api/stream", stream=True)
+            response = client.get("/api/stream", stream=True)
             # If not rate limited immediately, it worked
             assert response.status_code in [200, 429]
         except Exception:
@@ -134,7 +141,7 @@ class TestSmartSurgeIntegration:
         server = custom_rate_limit_server(config, port=5566)
         
         client = SmartSurgeClient(base_url="http://127.0.0.1:5566")
-        response, _ = client.get("/api/test")
+        response = client.get("/api/test")
         
         # Check custom headers are present
         assert response.headers.get("X-API-Version") == "1.0"
@@ -154,7 +161,7 @@ class TestSmartSurgeIntegration:
         
         # Make requests up to soft limit
         for i in range(8):
-            response, _ = client.get("/api/test")
+            response = client.get("/api/test")
             
             if i >= 7:  # After soft limit
                 assert "X-RateLimit-Warning" in response.headers

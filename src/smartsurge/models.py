@@ -279,6 +279,7 @@ class RequestHistory(BaseModel):
     logger: Optional[logging.Logger] = Field(default=None, exclude=True)
     refit_every: int = Field(default=10, ge=1, le=1000)
     responses_since_refit: int = Field(default=0, ge=0, exclude=True)
+    model_disabled: bool = Field(default=False)
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -299,8 +300,8 @@ class RequestHistory(BaseModel):
                 f"RequestHistory.{self.endpoint}.{self.method}"
             )
 
-        # Initialize HMM if not provided
-        if self.hmm is None:
+        # Initialize HMM if not provided and not disabled
+        if self.hmm is None and not self.model_disabled:
             self.hmm = HMM(logger=self.logger.getChild("HMM"))
 
     def add_request(self, entry: RequestEntry) -> None:
@@ -427,6 +428,27 @@ class RequestHistory(BaseModel):
             f"[{self.request_id}] Merged histories for {self.endpoint} {self.method}, now with {len(self.entries)} entries and search status {self.search_status}"
         )
 
+    def disable_model(self) -> None:
+        """
+        Disable the HMM model. When disabled, no rate limit estimation will be performed.
+        """
+        self.model_disabled = True
+        self.logger.info(
+            f"[{self.request_id}] HMM model disabled for {self.endpoint} {self.method}"
+        )
+
+    def enable_model(self) -> None:
+        """
+        Enable the HMM model. When enabled, rate limit estimation will be performed.
+        """
+        self.model_disabled = False
+        # Initialize HMM if not already present
+        if self.hmm is None:
+            self.hmm = HMM(logger=self.logger.getChild("HMM"))
+        self.logger.info(
+            f"[{self.request_id}] HMM model enabled for {self.endpoint} {self.method}"
+        )
+
     def intercept_request(self) -> None:
         """
         Intercept a request to enforce rate limit search procedure.
@@ -529,9 +551,10 @@ class RequestHistory(BaseModel):
             f"[{self.request_id}] Responses since last refit: {self.responses_since_refit}"
         )
 
-        # Check if it's time to refit the HMM
+        # Check if it's time to refit the HMM (only if model is not disabled)
         if (
-            self.search_status == SearchStatus.COMPLETED
+            not self.model_disabled
+            and self.search_status == SearchStatus.COMPLETED
             and self.responses_since_refit >= self.refit_every
         ):
             if self.has_minimum_observations():
@@ -551,7 +574,7 @@ class RequestHistory(BaseModel):
             in (ResponseType.RATE_LIMITED, ResponseType.POTENTIALLY_RATE_LIMITED)
             and self.search_status == SearchStatus.COMPLETED
         ):
-            if self.has_minimum_observations():
+            if not self.model_disabled and self.has_minimum_observations():
                 self.logger.warning(
                     f"[{self.request_id}] Rate limit error received after estimation was completed! "
                     f"Recalculating HMM parameters for {self.endpoint} {self.method}"
@@ -561,11 +584,16 @@ class RequestHistory(BaseModel):
                 self._update_hmm()
                 self.responses_since_refit = 0  # Reset counter after forced refit
             else:
-                self.logger.warning(
-                    f"[{self.request_id}] Rate limit error received but insufficient data for HMM estimation. "
-                    f"Transitioning to WAITING_TO_ESTIMATE for {self.endpoint} {self.method}"
-                )
-                self.search_status = SearchStatus.WAITING_TO_ESTIMATE
+                if self.model_disabled:
+                    self.logger.debug(
+                        f"[{self.request_id}] Rate limit error received but HMM model is disabled"
+                    )
+                else:
+                    self.logger.warning(
+                        f"[{self.request_id}] Rate limit error received but insufficient data for HMM estimation. "
+                        f"Transitioning to WAITING_TO_ESTIMATE for {self.endpoint} {self.method}"
+                    )
+                    self.search_status = SearchStatus.WAITING_TO_ESTIMATE
 
             return
 
@@ -577,14 +605,18 @@ class RequestHistory(BaseModel):
             return
 
         if self.search_status == SearchStatus.WAITING_TO_ESTIMATE:
-            # Check if we have enough data to start estimation
-            if self.has_minimum_observations():
+            # Check if we have enough data to start estimation (only if model is not disabled)
+            if not self.model_disabled and self.has_minimum_observations():
                 self.logger.info(
                     f"[{self.request_id}] Collected {len(self.entries)} data points with required success/failure mix, starting HMM estimation for {self.endpoint} {self.method}"
                 )
                 self._update_hmm()
                 self.search_status = SearchStatus.COMPLETED
                 self.responses_since_refit = 0  # Reset counter after initial fit
+            elif self.model_disabled:
+                self.logger.debug(
+                    f"[{self.request_id}] Sufficient data collected but HMM model is disabled"
+                )
 
             return
 
@@ -594,6 +626,12 @@ class RequestHistory(BaseModel):
 
         Requires at least min_data_points observations with at least one success and one failure.
         """
+        if self.model_disabled:
+            self.logger.debug(
+                f"[{self.request_id}] HMM model is disabled, skipping update"
+            )
+            return
+
         try:
             if not self.has_minimum_observations():
                 self.logger.debug(

@@ -132,6 +132,7 @@ class SmartSurgeClient:
         min_time_period: float = 1.0,
         max_time_period: float = 3600.0,
         refit_every: int = 20,
+        model_disabled: bool = False,
         logger: Optional[logging.Logger] = None,
         **kwargs):
         """
@@ -147,6 +148,7 @@ class SmartSurgeClient:
             min_time_period: Minimum time period to consider for rate limiting (seconds).
             max_time_period: Maximum time period for rate limiting (seconds).
             refit_every: Number of responses after which HMM should be refit (default: 20).
+            model_disabled: Disable the HMM model for rate limit estimation (default: False).
             logger: Optional custom logger to use.
             **kwargs: Additional configuration options for ClientConfig.
         """
@@ -169,6 +171,7 @@ class SmartSurgeClient:
         self.user_rate_limit = rate_limit
         self.response_rate_limit = None
         self.refit_every = refit_every
+        self.model_disabled = model_disabled
 
         # Set up logger
         self.logger = logger or logging.getLogger("smartsurge.client")
@@ -259,7 +262,8 @@ class SmartSurgeClient:
                 min_time_period=self.config.min_time_period,
                 max_time_period=self.config.max_time_period,
                 logger=history_logger,
-                refit_every=self.refit_every)
+                refit_every=self.refit_every,
+                model_disabled=self.model_disabled)
 
         return self.histories[key]
 
@@ -751,6 +755,32 @@ class SmartSurgeClient:
             self.logger.debug(
                 f"No history found for {endpoint} {method}, nothing to clear"
             )
+
+    def disable_model(self) -> None:
+        """
+        Disable the HMM model for all endpoint/method combinations.
+
+        This disables rate limit estimation using the Hidden Markov Model
+        for all existing and future request histories.
+        """
+        self.model_disabled = True
+        # Update all existing histories
+        for history in self.histories.values():
+            history.disable_model()
+        self.logger.info("HMM model disabled for all endpoints")
+
+    def enable_model(self) -> None:
+        """
+        Enable the HMM model for all endpoint/method combinations.
+
+        This enables rate limit estimation using the Hidden Markov Model
+        for all existing and future request histories.
+        """
+        self.model_disabled = False
+        # Update all existing histories
+        for history in self.histories.values():
+            history.enable_model()
+        self.logger.info("HMM model enabled for all endpoints")
 
     def list_rate_limits(self) -> Dict[Tuple[str, str], Optional[RateLimit]]:
         """

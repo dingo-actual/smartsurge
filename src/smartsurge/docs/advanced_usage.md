@@ -353,6 +353,47 @@ config = ClientConfig(
 client = SmartSurgeClient(config=config)
 ```
 
+### Disabling HMM Detection
+
+In some cases, you may want to disable automatic rate limit detection:
+
+```python
+# Create client with HMM disabled
+client = SmartSurgeClient(model_disabled=True)
+
+# All requests will be made without rate limit detection
+response = client.get("https://api.example.com/data")
+
+# You can still manually set rate limits
+client.set_rate_limit(
+    endpoint="/api/data",
+    method="GET",
+    max_requests=100,
+    time_period=60.0
+)
+
+# Or disable/enable HMM dynamically
+client = SmartSurgeClient()
+
+# Disable HMM for specific operations
+client.disable_model()
+# ... make requests without detection ...
+
+# Re-enable HMM
+client.enable_model()
+# ... rate limit detection resumes ...
+
+# Check if model is disabled
+response, history = client.get("/api/test", return_history=True)
+print(f"HMM disabled: {history.model_disabled}")
+```
+
+Use cases for disabling HMM:
+- Testing and benchmarking without rate limit interference
+- APIs with complex rate limiting that HMM can't model
+- When you have complete rate limit information from API docs
+- Reducing computational overhead for high-volume applications
+
 ### Accessing HMM Results
 
 ```python

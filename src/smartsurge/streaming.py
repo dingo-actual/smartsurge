@@ -38,6 +38,7 @@ class StreamingState(BaseModel):
         headers: HTTP headers for the request
         params: Optional query parameters
         data: Optional request body data
+        chunk_size: Size of chunks to process
         accumulated_data: Data accumulated so far
         last_position: Last position in the stream
         total_size: Total size of the stream if known
@@ -50,6 +51,7 @@ class StreamingState(BaseModel):
     headers: Dict[str, str]
     params: Optional[Dict[str, Any]] = None
     data: Optional[Dict[str, Any]] = None
+    chunk_size: int
     accumulated_data: bytes
     last_position: int = Field(..., ge=0)
     total_size: Optional[int] = None
@@ -297,6 +299,7 @@ class AbstractStreamingRequest(ABC):
             headers=safe_headers,
             params=self.params,
             data=self.data,
+            chunk_size=self.chunk_size,
             accumulated_data=bytes(self.accumulated_data),
             last_position=self.position,
             total_size=self.total_size,
@@ -339,6 +342,7 @@ class AbstractStreamingRequest(ABC):
             # Update instance variables
             self.endpoint = state.endpoint
             self.headers = state.headers
+            self.params = state.params
             self.accumulated_data = bytearray(state.accumulated_data)
             self.position = state.last_position
             self.total_size = state.total_size

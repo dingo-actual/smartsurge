@@ -1811,3 +1811,260 @@ class Test_SmartSurgeClient_AsyncMethods_05_StateTransitionBehaviors:
         assert history.entries[0].status_code == 429
         # Check if consecutive_refusals was incremented
         assert history.consecutive_refusals == 1
+
+
+
+class Test_SmartSurgeClient_ModelDisabled_01_NominalBehaviors:
+    """Tests for nominal behaviors of SmartSurgeClient model_disabled functionality."""
+
+    def test_init_with_model_disabled_false_by_default(self):
+        """Test that model_disabled is False by default."""
+        client = SmartSurgeClient()
+        assert client.model_disabled is False
+        
+        # New histories should have model enabled
+        history = client._get_or_create_history("/test", RequestMethod.GET)
+        assert history.model_disabled is False
+        assert history.hmm is not None
+    
+    def test_init_with_model_disabled_true(self):
+        """Test that model_disabled can be initialized as True."""
+        client = SmartSurgeClient(model_disabled=True)
+        assert client.model_disabled is True
+        
+        # New histories should have model disabled
+        history = client._get_or_create_history("/test", RequestMethod.GET)
+        assert history.model_disabled is True
+        assert history.hmm is None
+    
+    def test_disable_model_method(self):
+        """Test the disable_model method disables HMM for all histories."""
+        client = SmartSurgeClient()
+        
+        # Create some histories
+        history1 = client._get_or_create_history("/test1", RequestMethod.GET)
+        history2 = client._get_or_create_history("/test2", RequestMethod.POST)
+        
+        # Initially model should be enabled
+        assert client.model_disabled is False
+        assert history1.model_disabled is False
+        assert history2.model_disabled is False
+        
+        # Disable the model
+        client.disable_model()
+        
+        assert client.model_disabled is True
+        assert history1.model_disabled is True
+        assert history2.model_disabled is True
+        
+        # New histories should also have model disabled
+        history3 = client._get_or_create_history("/test3", RequestMethod.PUT)
+        assert history3.model_disabled is True
+    
+    def test_enable_model_method(self):
+        """Test the enable_model method enables HMM for all histories."""
+        client = SmartSurgeClient(model_disabled=True)
+        
+        # Create some histories
+        history1 = client._get_or_create_history("/test1", RequestMethod.GET)
+        history2 = client._get_or_create_history("/test2", RequestMethod.POST)
+        
+        # Initially model should be disabled
+        assert client.model_disabled is True
+        assert history1.model_disabled is True
+        assert history2.model_disabled is True
+        
+        # Enable the model
+        client.enable_model()
+        
+        assert client.model_disabled is False
+        assert history1.model_disabled is False
+        assert history2.model_disabled is False
+        
+        # New histories should also have model enabled
+        history3 = client._get_or_create_history("/test3", RequestMethod.PUT)
+        assert history3.model_disabled is False
+        assert history3.hmm is not None
+
+
+class Test_SmartSurgeClient_ModelDisabled_02_NegativeBehaviors:
+    """Tests for negative behaviors of SmartSurgeClient model_disabled functionality."""
+
+    @patch("requests.Session.request")
+    def test_no_hmm_estimation_when_model_disabled(self, mock_request):
+        """Test that HMM estimation doesn't occur when model is disabled."""
+        # Set up mock response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_response.headers = {}  # No Retry-After header
+        mock_request.return_value = mock_response
+        
+        client = SmartSurgeClient(model_disabled=True)
+        
+        # Make enough requests to normally trigger HMM estimation
+        for i in range(15):
+            if i % 2 == 0:
+                mock_response.status_code = 200
+                mock_response.ok = True
+                client.request("GET", "/test")
+            else:
+                mock_response.status_code = 429
+                mock_response.ok = False
+                # Expect RateLimitExceeded to be raised for 429 responses
+                with pytest.raises(RateLimitExceeded):
+                    client.request("GET", "/test")
+        
+        history = client._get_or_create_history("/test", RequestMethod.GET)
+        
+        # HMM should not have been used
+        assert history.model_disabled is True
+        assert history.rate_limit is None  # No rate limit estimated
+        assert history.search_status != SearchStatus.COMPLETED
+
+    @patch('smartsurge.client.logger')
+    def test_disable_model_logs_info(self, mock_logger):
+        """Test that disable_model logs an info message."""
+        client = SmartSurgeClient(logger=mock_logger)
+        
+        client.disable_model()
+        
+        # Check that info was logged
+        mock_logger.info.assert_called()
+        log_message = mock_logger.info.call_args[0][0]
+        assert "HMM model disabled" in log_message
+    
+    @patch('smartsurge.client.logger')
+    def test_enable_model_logs_info(self, mock_logger):
+        """Test that enable_model logs an info message."""
+        client = SmartSurgeClient(model_disabled=True, logger=mock_logger)
+        
+        client.enable_model()
+        
+        # Check that info was logged
+        mock_logger.info.assert_called()
+        log_message = mock_logger.info.call_args[0][0]
+        assert "HMM model enabled" in log_message
+
+
+class Test_SmartSurgeClient_ModelDisabled_03_BoundaryBehaviors:
+    """Tests for boundary behaviors of SmartSurgeClient model_disabled functionality."""
+
+    def test_toggle_model_state_multiple_times(self):
+        """Test toggling model state multiple times across multiple histories."""
+        client = SmartSurgeClient()
+        
+        # Create histories
+        history1 = client._get_or_create_history("/test1", RequestMethod.GET)
+        history2 = client._get_or_create_history("/test2", RequestMethod.POST)
+        
+        # Initial state
+        assert client.model_disabled is False
+        
+        # Toggle multiple times
+        client.disable_model()
+        assert client.model_disabled is True
+        assert history1.model_disabled is True
+        assert history2.model_disabled is True
+        
+        client.enable_model()
+        assert client.model_disabled is False
+        assert history1.model_disabled is False
+        assert history2.model_disabled is False
+        
+        client.disable_model()
+        assert client.model_disabled is True
+        assert history1.model_disabled is True
+        assert history2.model_disabled is True
+        
+        client.enable_model()
+        assert client.model_disabled is False
+        assert history1.model_disabled is False
+        assert history2.model_disabled is False
+    
+    def test_enable_model_when_already_enabled(self):
+        """Test enabling model when it's already enabled."""
+        client = SmartSurgeClient()
+        
+        # Already enabled
+        assert client.model_disabled is False
+        
+        # Enable again
+        client.enable_model()
+        
+        # Should remain enabled
+        assert client.model_disabled is False
+    
+    def test_disable_model_when_already_disabled(self):
+        """Test disabling model when it's already disabled."""
+        client = SmartSurgeClient(model_disabled=True)
+        
+        # Already disabled
+        assert client.model_disabled is True
+        
+        # Disable again
+        client.disable_model()
+        
+        # Should remain disabled
+        assert client.model_disabled is True
+
+
+class Test_SmartSurgeClient_ModelDisabled_04_ErrorHandlingBehaviors:
+    """Tests for error handling behaviors of SmartSurgeClient model_disabled functionality."""
+
+    @patch("requests.Session.request")
+    def test_rate_limit_from_headers_works_with_model_disabled(self, mock_request):
+        """Test that rate limits from headers still work when model is disabled."""
+        # Set up mock response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_request.return_value = mock_response
+        
+        client = SmartSurgeClient(model_disabled=True)
+        
+        # Make a request - the RequestEntry will have rate limit info
+        client.request("GET", "/test")
+        
+        # Manually add a request entry with rate limit info to simulate headers
+        history = client._get_or_create_history("/test", RequestMethod.GET)
+        entry = RequestEntry(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            status_code=200,
+            response_time=0.1,
+            success=True,
+            max_requests=100,
+            max_request_period=60.0
+        )
+        history.add_request(entry)
+        
+        # Rate limit should be set from headers even with model disabled
+        assert history.rate_limit is not None
+        assert history.rate_limit.max_requests == 100
+        assert history.rate_limit.time_period == 60.0
+        assert history.rate_limit.source == "headers"
+        assert history.search_status == SearchStatus.COMPLETED
+    
+    def test_model_state_persists_through_client_lifetime(self):
+        """Test that model state persists throughout the client's lifetime."""
+        client = SmartSurgeClient(model_disabled=True)
+        
+        # Create initial histories
+        history1 = client._get_or_create_history("/test1", RequestMethod.GET)
+        assert history1.model_disabled is True
+        
+        # Some time later, create more histories
+        history2 = client._get_or_create_history("/test2", RequestMethod.POST)
+        assert history2.model_disabled is True
+        
+        # Enable model
+        client.enable_model()
+        
+        # All histories should reflect the change
+        assert history1.model_disabled is False
+        assert history2.model_disabled is False
+        
+        # New histories should also have model enabled
+        history3 = client._get_or_create_history("/test3", RequestMethod.DELETE)
+        assert history3.model_disabled is False

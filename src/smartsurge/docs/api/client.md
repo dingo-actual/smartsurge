@@ -35,6 +35,7 @@ SmartSurgeClient(
     max_time_period: float = 3600.0,
     refit_every: int = 20,
     logger: Optional[logging.Logger] = None,
+    model_disabled: bool = False,
     **kwargs
 )
 ```
@@ -53,6 +54,7 @@ SmartSurgeClient(
 | `max_time_period` | `float` | `3600.0` | Maximum seconds for rate limit detection window |
 | `refit_every` | `int` | `20` | Number of responses after which HMM should be refit |
 | `logger` | `Optional[logging.Logger]` | `None` | Custom logger instance |
+| `model_disabled` | `bool` | `False` | Disable HMM rate limit detection for all endpoints |
 | `**kwargs` | `Any` | - | Additional options passed to `ClientConfig` |
 
 ### Usage Examples
@@ -80,6 +82,12 @@ with Client() as client:
 response, history = client.get("/users", return_history=True)
 print(f"Success rate: {history.success_rate():.2%}")
 print(f"Total requests: {len(history)}")
+
+# Create client with HMM disabled
+client_no_hmm = Client(
+    base_url="https://api.example.com",
+    model_disabled=True  # No rate limit detection
+)
 ```
 
 ## Core Methods
@@ -393,6 +401,38 @@ def reset_all_rate_limits() -> None
 ```python
 # Start fresh
 client.reset_all_rate_limits()
+```
+
+### disable_model()
+
+Disable the HMM model for all endpoint/method combinations. When disabled, no rate limit estimation will be performed.
+
+```python
+def disable_model() -> None
+```
+
+#### Example
+
+```python
+# Disable HMM rate limit detection
+client.disable_model()
+# All subsequent requests will be logged but not analyzed for rate limits
+```
+
+### enable_model()
+
+Enable the HMM model for all endpoint/method combinations. When enabled, rate limit estimation will be performed.
+
+```python
+def enable_model() -> None
+```
+
+#### Example
+
+```python
+# Re-enable HMM rate limit detection
+client.enable_model()
+# Rate limit detection will resume for all endpoints
 ```
 
 ## Request History

@@ -26,6 +26,7 @@ class Test_StreamingState_01_NominalBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": b"test data",
             "last_position": 9
         }
@@ -43,6 +44,7 @@ class Test_StreamingState_01_NominalBehaviors:
             endpoint="https://api.example.com/data",
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0
         )
@@ -56,6 +58,7 @@ class Test_StreamingState_01_NominalBehaviors:
             endpoint="https://api.example.com/data",
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0
         )
@@ -63,6 +66,7 @@ class Test_StreamingState_01_NominalBehaviors:
             endpoint="https://api.example.com/data",
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0
         )
@@ -79,6 +83,7 @@ class Test_StreamingState_01_NominalBehaviors:
             headers={"Content-Type": "application/json"},
             params={"key": "value"},
             data={"field": "value"},
+            chunk_size=8192,
             accumulated_data=b"test data",
             last_position=9,
             total_size=100,
@@ -101,6 +106,7 @@ class Test_StreamingState_01_NominalBehaviors:
             endpoint="https://api.example.com/data",
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0,
             # Optional fields:
@@ -125,6 +131,7 @@ class Test_StreamingState_02_NegativeBehaviors:
             StreamingState(
                 method="GET", 
                 headers={}, 
+                chunk_size=8192,
                 accumulated_data=b"", 
                 last_position=0
             )
@@ -134,6 +141,7 @@ class Test_StreamingState_02_NegativeBehaviors:
             StreamingState(
                 endpoint="https://api.example.com/data", 
                 headers={}, 
+                chunk_size=8192,
                 accumulated_data=b"", 
                 last_position=0
             )
@@ -143,6 +151,7 @@ class Test_StreamingState_02_NegativeBehaviors:
             StreamingState(
                 endpoint="https://api.example.com/data", 
                 method="GET", 
+                chunk_size=8192,
                 accumulated_data=b"", 
                 last_position=0
             )
@@ -153,6 +162,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="https://api.example.com/data", 
                 method="GET", 
                 headers={}, 
+                chunk_size=8192,
                 last_position=0
             )
         
@@ -162,6 +172,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="https://api.example.com/data", 
                 method="GET", 
                 headers={}, 
+                chunk_size=8192,
                 accumulated_data=b""
             )
 
@@ -173,6 +184,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint=123,  # Should be string
                 method="GET", 
                 headers={}, 
+                chunk_size=8192,
                 accumulated_data=b"", 
                 last_position=0
             )
@@ -183,6 +195,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="https://api.example.com/data", 
                 method="GET", 
                 headers="not-a-dict",  # Should be dict
+                chunk_size=8192,
                 accumulated_data=b"", 
                 last_position=0
             )
@@ -193,6 +206,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="https://api.example.com/data", 
                 method="GET", 
                 headers={}, 
+                chunk_size=8192,
                 accumulated_data=123,  # Should be bytes
                 last_position=0
             )
@@ -203,6 +217,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="https://api.example.com/data", 
                 method="GET", 
                 headers={}, 
+                chunk_size=8192,
                 accumulated_data=b"", 
                 last_position="zero"  # Should be int
             )
@@ -214,6 +229,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="",  # Empty string
                 method="GET",
                 headers={},
+                chunk_size=8192,
                 accumulated_data=b"",
                 last_position=0
             )
@@ -225,6 +241,7 @@ class Test_StreamingState_02_NegativeBehaviors:
                 endpoint="https://api.example.com/data",
                 method="GET",
                 headers={},
+                chunk_size=8192,
                 accumulated_data=b"",
                 last_position=-1  # Negative value
             )
@@ -239,6 +256,7 @@ class Test_StreamingState_03_BoundaryBehaviors:
             endpoint="x",  # Minimum length
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0
         )
@@ -250,6 +268,7 @@ class Test_StreamingState_03_BoundaryBehaviors:
             endpoint="https://api.example.com/data",
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0  # Exactly zero
         )
@@ -263,6 +282,7 @@ class Test_StreamingState_03_BoundaryBehaviors:
             headers={},  # Empty dict
             params={},   # Empty dict
             data={},     # Empty dict
+            chunk_size=8192,
             accumulated_data=b"",
             last_position=0
         )
@@ -278,6 +298,7 @@ class Test_StreamingState_03_BoundaryBehaviors:
             endpoint="https://api.example.com/data",
             method="GET",
             headers={},
+            chunk_size=8192,
             accumulated_data=large_data,
             last_position=len(large_data)
         )
@@ -606,6 +627,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": "dGVzdCBkYXRh",  # "test data" in base64
             "last_position": 9,
             "total_size": 100,
@@ -649,6 +671,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": "dGVzdCBkYXRh",  # "test data" in base64
             "last_position": 9,
             "total_size": 100,
@@ -686,6 +709,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": "dGVzdCBkYXRh",  # "test data" in base64
             "last_position": 9,
             "total_size": 100,
@@ -717,6 +741,7 @@ class Test_AbstractStreamingRequest_LoadState_01_NominalBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {},
+            "chunk_size": 8192,
             "accumulated_data": "",
             "last_position": 0,
             "request_id": "saved-request-id"
@@ -858,6 +883,7 @@ class Test_AbstractStreamingRequest_LoadState_03_BoundaryBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {},
+            "chunk_size": 8192,
             "accumulated_data": "",
             "last_position": 0,  # Position zero
             "request_id": "test-id"
@@ -889,6 +915,7 @@ class Test_AbstractStreamingRequest_LoadState_03_BoundaryBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {},
+            "chunk_size": 8192,
             "accumulated_data": "",  # Empty data
             "last_position": 0,
             "request_id": "test-id"
@@ -1000,6 +1027,7 @@ class Test_AbstractStreamingRequest_LoadState_05_StateTransitionBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": "dGVzdCBkYXRh",  # "test data" in base64
             "last_position": 9,
             "total_size": 100,
@@ -1043,6 +1071,7 @@ class Test_AbstractStreamingRequest_LoadState_05_StateTransitionBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": "dGVzdCBkYXRh",  # "test data" in base64
             "last_position": 9,
             "total_size": 100,
@@ -2035,6 +2064,7 @@ class Test_JSONStreamingRequest_Resume_05_StateTransitionBehaviors:
             "endpoint": "https://api.example.com/data",
             "method": "GET",
             "headers": {"Authorization": "Bearer token123"},
+            "chunk_size": 8192,
             "accumulated_data": "cGFydGlhbCBkYXRh",  # "partial data" in base64
             "last_position": 12,
             "total_size": 100,
@@ -2739,6 +2769,7 @@ class Test_StreamingState_ParamsData_WithoutMocks:
             headers={"Accept": "application/json"},
             params=params,
             data=data,
+            chunk_size=8192,
             accumulated_data=b"test data",
             last_position=9
         )
@@ -2757,6 +2788,7 @@ class Test_StreamingState_ParamsData_WithoutMocks:
             headers={"Content-Type": "application/json"},
             params=params,
             data=data,
+            chunk_size=8192,
             accumulated_data=b"accumulated",
             last_position=11
         )

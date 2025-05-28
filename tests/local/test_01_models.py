@@ -1,8 +1,8 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from smartsurge.models import (
-    RequestMethod, SearchStatus, RequestEntry, RateLimit
+    RequestMethod, SearchStatus, RequestEntry, RateLimit, RequestHistory
 )
 
 
@@ -511,3 +511,244 @@ class Test_RateLimit_GetRequestsPerSecond_03_BoundaryBehaviors:
         result = rate_limit.get_requests_per_second()
         
         assert result == 1000000.0  # 1,000,000 requests / 1 second = 1,000,000 req/s
+
+
+class Test_RequestHistory_ModelDisabled_01_NominalBehaviors:
+    def test_model_disabled_initialized_false_by_default(self):
+        """Test that model_disabled is False by default."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET
+        )
+        
+        assert history.model_disabled is False
+        assert history.hmm is not None  # HMM should be initialized
+    
+    def test_model_disabled_initialized_true(self):
+        """Test that model_disabled can be initialized as True."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            model_disabled=True
+        )
+        
+        assert history.model_disabled is True
+        assert history.hmm is None  # HMM should not be initialized
+    
+    def test_disable_model_method(self):
+        """Test the disable_model method sets model_disabled to True."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET
+        )
+        
+        # Initially model should be enabled
+        assert history.model_disabled is False
+        assert history.hmm is not None
+        
+        # Disable the model
+        history.disable_model()
+        
+        assert history.model_disabled is True
+        # HMM instance should still exist but won't be used
+        assert history.hmm is not None
+    
+    def test_enable_model_method(self):
+        """Test the enable_model method sets model_disabled to False."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            model_disabled=True
+        )
+        
+        # Initially model should be disabled
+        assert history.model_disabled is True
+        assert history.hmm is None
+        
+        # Enable the model
+        history.enable_model()
+        
+        assert history.model_disabled is False
+        assert history.hmm is not None  # HMM should be initialized
+
+
+class Test_RequestHistory_ModelDisabled_02_NegativeBehaviors:
+    def test_no_hmm_updates_when_model_disabled(self):
+        """Test that HMM is not updated when model is disabled."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            model_disabled=True
+        )
+        
+        # Add enough requests to trigger HMM update normally
+        for i in range(15):
+            entry = RequestEntry(
+                endpoint="/test",
+                method=RequestMethod.GET,
+                status_code=200 if i % 2 == 0 else 429,
+                response_time=0.1,
+                success=(i % 2 == 0)
+            )
+            history.log_response_and_update(entry)
+        
+        # Search status should remain WAITING_TO_ESTIMATE
+        assert history.search_status != SearchStatus.COMPLETED
+        assert history.rate_limit is None
+    
+    def test_disable_model_logs_info(self):
+        """Test that disable_model completes without errors."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET
+        )
+        
+        # Should complete without errors
+        history.disable_model()
+        
+        # Verify the model is disabled
+        assert history.model_disabled is True
+    
+    def test_enable_model_logs_info(self):
+        """Test that enable_model completes without errors."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            model_disabled=True
+        )
+        
+        # Should complete without errors
+        history.enable_model()
+        
+        # Verify the model is enabled
+        assert history.model_disabled is False
+        assert history.hmm is not None
+
+
+class Test_RequestHistory_ModelDisabled_03_BoundaryBehaviors:
+    def test_toggle_model_state_multiple_times(self):
+        """Test toggling model state multiple times."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET
+        )
+        
+        # Initial state
+        assert history.model_disabled is False
+        
+        # Toggle multiple times
+        history.disable_model()
+        assert history.model_disabled is True
+        
+        history.enable_model()
+        assert history.model_disabled is False
+        
+        history.disable_model()
+        assert history.model_disabled is True
+        
+        history.enable_model()
+        assert history.model_disabled is False
+    
+    def test_enable_model_when_already_enabled(self):
+        """Test enabling model when it's already enabled."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET
+        )
+        
+        # Already enabled
+        assert history.model_disabled is False
+        assert history.hmm is not None
+        
+        # Enable again
+        history.enable_model()
+        
+        # Should remain enabled
+        assert history.model_disabled is False
+        assert history.hmm is not None
+    
+    def test_disable_model_when_already_disabled(self):
+        """Test disabling model when it's already disabled."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            model_disabled=True
+        )
+        
+        # Already disabled
+        assert history.model_disabled is True
+        
+        # Disable again
+        history.disable_model()
+        
+        # Should remain disabled
+        assert history.model_disabled is True
+
+
+class Test_RequestHistory_ModelDisabled_04_ErrorHandlingBehaviors:
+    def test_rate_limit_from_headers_works_with_model_disabled(self):
+        """Test that rate limits from headers still work when model is disabled."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            model_disabled=True
+        )
+        
+        # Add a request with rate limit info in headers
+        entry = RequestEntry(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            status_code=200,
+            response_time=0.1,
+            success=True,
+            max_requests=100,
+            max_request_period=60.0
+        )
+        
+        history.add_request(entry)
+        
+        # Rate limit should be set from headers even with model disabled
+        assert history.rate_limit is not None
+        assert history.rate_limit.max_requests == 100
+        assert history.rate_limit.time_period == 60.0
+        assert history.rate_limit.source == "headers"
+        assert history.search_status == SearchStatus.COMPLETED
+    
+    def test_refit_skipped_when_model_disabled(self):
+        """Test that HMM refit is skipped when model is disabled."""
+        history = RequestHistory(
+            endpoint="/test",
+            method=RequestMethod.GET,
+            refit_every=5
+        )
+        
+        # Add enough successful requests to normally complete estimation
+        for i in range(15):
+            entry = RequestEntry(
+                endpoint="/test",
+                method=RequestMethod.GET,
+                status_code=200 if i % 3 != 0 else 429,
+                response_time=0.1,
+                success=(i % 3 != 0)
+            )
+            history.log_response_and_update(entry)
+        
+        # Should have completed estimation
+        assert history.search_status == SearchStatus.COMPLETED
+        
+        # Now disable the model
+        history.disable_model()
+        
+        # Add more requests that would normally trigger refit
+        for i in range(10):
+            entry = RequestEntry(
+                endpoint="/test",
+                method=RequestMethod.GET,
+                status_code=200,
+                response_time=0.1,
+                success=True
+            )
+            history.log_response_and_update(entry)
+        
+        # Rate limit should remain from before model was disabled
+        assert history.rate_limit is not None

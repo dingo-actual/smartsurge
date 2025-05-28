@@ -29,3 +29,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump for new release
+
+## [0.0.4] - 2025-05-13
+
+### Changed
+
+- Bump for new release
+
+## [0.0.5] - 2025-05-13
+
+### Changed
+
+- Enhanced HMM parameter-fitting
+
+## [0.0.6] - 2025-05-27
+
+### Added
+
+- `model_disabled` parameter to RequestHistory and SmartSurgeClient for disabling HMM rate limit detection
+- `disable_model()` and `enable_model()` methods to dynamically control HMM usage
+- Support for operating without automatic rate limit detection while maintaining request logging
+
+### Fixed
+
+- StreamingState now properly includes required `chunk_size` field
+- Integration tests now correctly handle client method return values
