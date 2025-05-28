@@ -1,6 +1,6 @@
 # SmartSurge: Intelligent HTTP Client with Adaptive Rate Limit Detection
 
-<img src="images/smartsurge.png" alt="SmartSurge logo" width="1280" height="640">
+<img src="images/smartsurge.png" alt="SmartSurge logo" width="830" height="415">
 <br>
 <br>
 
