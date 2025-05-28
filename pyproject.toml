@@ -78,8 +78,6 @@ include = ["smartsurge", "smartsurge.*"]
 
 [tool.setuptools.package-data]
 "smartsurge.benchmarks" = ["*.py", "*.md", "*.sh"]
-"smartsurge.docs" = ["*.md", "*.pdf", "api/*.md", "api/*.pdf"]
-"*" = ["*.md", "*.txt"]
 
 [tool.isort]
 profile = "black"
